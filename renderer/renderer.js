@@ -115,6 +115,7 @@ $('#launch-form').addEventListener('submit', (e) => {
 /* Share the path-normalisation logic with main (lib/repos.js, loaded via <script>)
    so repo ids computed here and in the main process can never drift. */
 const Repos = window.Repos;
+const GitStat = window.GitStat;
 function normRepoPath(p) { return Repos.normalizePath(p); }
 function repoIdForCwd(dir) {
   const hit = Repos.findRepo(repos, normRepoPath(dir));
@@ -133,9 +134,16 @@ function flashRepoMsg(text) {
   flashRepoMsg._t = setTimeout(() => { repoMsgEl.hidden = true; }, 4500);
 }
 
+/** Signature of the git-derived fields, to skip re-renders when nothing changed. */
+let reposSig = '';
+function computeSig(list) {
+  return JSON.stringify((list || []).map((r) => ({ id: r.id, branch: r.branch, stat: r.stat, worktrees: r.worktrees })));
+}
+function setRepos(list) { repos = list || []; reposSig = computeSig(repos); }
+
 async function loadReposUI() {
-  try { const res = await window.deck.reposList(); repos = (res && res.repos) || []; }
-  catch (_) { repos = []; }
+  try { const res = await window.deck.reposList(); setRepos((res && res.repos) || []); }
+  catch (_) { setRepos([]); }
   retagSessions();
   renderRepos();
 }
@@ -143,7 +151,7 @@ async function addRepoFlow() {
   const dir = await window.deck.openDir();
   if (!dir) return;
   const res = await window.deck.reposAdd(dir);
-  repos = (res && res.repos) || [];
+  setRepos((res && res.repos) || []);
   retagSessions();
   if (res && res.ok === false) { flashRepoMsg('リポジトリの保存に失敗しました: ' + (res.error || '')); renderRepos(); return; }
   const added = Repos.findRepo(repos, normRepoPath(dir));
@@ -151,10 +159,22 @@ async function addRepoFlow() {
 }
 async function removeRepoFromList(id) {
   const res = await window.deck.reposRemove(id);
-  repos = (res && res.repos) || [];
+  setRepos((res && res.repos) || []);
   if (activeRepoId === id) activeRepoId = null;
   retagSessions();
   if (res && res.ok === false) flashRepoMsg('リポジトリの保存に失敗しました: ' + (res.error || ''));
+  renderRepos();
+}
+/** Poll/refresh git status (branch + diff stats + worktrees); re-render only on change.
+ *  Skipped while the window is blurred — the focus listener refreshes on return. */
+async function refreshReposGit() {
+  if (!windowFocused) return;
+  let res;
+  try { res = await window.deck.reposList(); } catch (_) { return; }
+  const next = (res && res.repos) || [];
+  if (computeSig(next) === reposSig) return;
+  setRepos(next);
+  retagSessions();
   renderRepos();
 }
 function selectRepo(id) {
@@ -205,8 +225,39 @@ function sessionsByRepo() {
   }
   return byRepo;
 }
+/** "+X" / "-Y" coloured chip, or null when there are no line changes. */
+function statBadge(stat) {
+  if (!GitStat.formatStat(stat)) return null;
+  const st = document.createElement('span');
+  st.className = 'repo-stat';
+  if (stat.insertions) {
+    const a = document.createElement('span');
+    a.className = 'stat-add'; a.textContent = '+' + stat.insertions; st.appendChild(a);
+  }
+  if (stat.deletions) {
+    const d = document.createElement('span');
+    d.className = 'stat-del'; d.textContent = '-' + stat.deletions; st.appendChild(d);
+  }
+  return st;
+}
+/** A git worktree row (branch + diff stat) under a repo. Informational. */
+function worktreeRow(w) {
+  const row = document.createElement('div');
+  row.className = 'repo-worktree' + (w.isAgentdeck ? ' is-agentdeck' : '');
+  const icon = document.createElement('span');
+  icon.className = 'wt-icon'; icon.textContent = '⎇';
+  const br = document.createElement('span');
+  br.className = 'wt-branch';
+  br.textContent = w.branch || '(detached)';
+  br.title = w.path;
+  row.appendChild(icon);
+  row.appendChild(br);
+  const st = statBadge(w.stat);
+  if (st) row.appendChild(st);
+  return row;
+}
 /** Build one group box — a registered repo, or the orphan "Other" group. */
-function buildGroup({ key, name, nameDim, path, branch, repoId, sessList }) {
+function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees, sessList }) {
   const item = document.createElement('div');
   item.className = 'repo-item' + (repoId && repoId === activeRepoId ? ' active' : '');
   if (repoId) item.dataset.repoId = repoId;
@@ -226,6 +277,8 @@ function buildGroup({ key, name, nameDim, path, branch, repoId, sessList }) {
     b.title = branch;
     row.appendChild(b);
   }
+  const st = statBadge(stat);
+  if (st) row.appendChild(st);
   if (sessList.length) {
     const c = document.createElement('span');
     c.className = 'repo-count' + (sessList.some(([, s]) => s.attention) ? ' attention' : '');
@@ -249,6 +302,12 @@ function buildGroup({ key, name, nameDim, path, branch, repoId, sessList }) {
     pathEl.textContent = path;
     item.appendChild(pathEl);
   }
+  if (worktrees && worktrees.length) {
+    const wtWrap = document.createElement('div');
+    wtWrap.className = 'repo-worktrees';
+    for (const w of worktrees) wtWrap.appendChild(worktreeRow(w));
+    item.appendChild(wtWrap);
+  }
   if (sessList.length) {
     const wrap = document.createElement('div');
     wrap.className = 'repo-sessions';
@@ -268,7 +327,8 @@ function renderRepos() {
   for (const repo of repos) {
     repoListEl.appendChild(buildGroup({
       key: repo.id, name: repo.name, path: repo.path, branch: repo.branch,
-      repoId: repo.id, sessList: byRepo.get(repo.id) || [],
+      repoId: repo.id, stat: repo.stat, worktrees: repo.worktrees,
+      sessList: byRepo.get(repo.id) || [],
     }));
   }
   const orphans = byRepo.get('') || [];
@@ -296,6 +356,9 @@ function refreshSessionState(s) {
 }
 
 $('#repo-add').addEventListener('click', addRepoFlow);
+$('#repo-refresh').addEventListener('click', refreshReposGit);
+setInterval(refreshReposGit, 7000);
+window.addEventListener('focus', refreshReposGit);
 
 // ---- session creation ------------------------------------------------------
 async function launch({ presetKey, command, name, cwd, worktree, branch }) {

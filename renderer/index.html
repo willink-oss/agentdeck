@@ -14,7 +14,10 @@
     <aside id="repos">
       <div class="repos-head">
         <span class="repos-title">Repositories</span>
-        <button type="button" id="repo-add" title="Add repository (folder)">+</button>
+        <div class="repos-actions">
+          <button type="button" id="repo-refresh" title="Refresh git status">&#x21bb;</button>
+          <button type="button" id="repo-add" title="Add repository (folder)">+</button>
+        </div>
       </div>
       <div id="repo-msg" class="repo-msg" hidden></div>
       <div id="repo-list" class="repo-list"></div>
@@ -124,6 +127,7 @@
   <script src="../lib/diff.js"></script>
   <script src="../lib/attention.js"></script>
   <script src="../lib/repos.js"></script>
+  <script src="../lib/gitstat.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

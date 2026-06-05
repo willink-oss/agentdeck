@@ -9,6 +9,7 @@ const { promisify } = require('util');
 const pty = require('node-pty');
 const { defaultShell, sanitizeBranch, worktreeFolderName } = require('./lib/git-utils');
 const Repos = require('./lib/repos');
+const GitStat = require('./lib/gitstat');
 
 const pexec = promisify(execFile);
 
@@ -55,15 +56,34 @@ function saveRepos(list) {
 
 const GIT_INFO_TTL = 4000;
 const gitInfoCache = new Map(); // path -> { at, info }
+async function safeGit(args, cwd) { try { return await git(args, cwd); } catch (_) { return ''; } }
+async function worktreeStat(dir) {
+  return GitStat.parseNumstat(await safeGit(['diff', '--numstat', 'HEAD'], dir));
+}
 async function gitInfoFor(dir) {
   const hit = gitInfoCache.get(dir);
   if (hit && (Date.now() - hit.at) < GIT_INFO_TTL) return hit.info;
   let info;
   try {
-    info = (await isRepo(dir))
-      ? { isRepo: true, branch: await currentBranch(dir) }
-      : { isRepo: false, branch: '' };
-  } catch (_) { info = { isRepo: false, branch: '' }; }
+    if (!(await isRepo(dir))) {
+      info = { isRepo: false, branch: '', stat: null, worktrees: [] };
+    } else {
+      const branch = await currentBranch(dir);
+      const stat = await worktreeStat(dir);
+      let root = dir;
+      try { root = (await repoRoot(dir)) || dir; } catch (_) {}
+      const rootNorm = Repos.normalizePath(root);
+      const wts = GitStat.parseWorktreeList(await safeGit(['worktree', 'list', '--porcelain'], root))
+        .filter((w) => !w.bare && Repos.normalizePath(w.path) !== rootNorm);
+      const worktrees = await Promise.all(wts.map(async (w) => ({
+        path: w.path,
+        branch: w.detached ? '' : w.branch,
+        isAgentdeck: GitStat.isAgentdeckWorktreePath(w.path),
+        stat: await worktreeStat(w.path),
+      })));
+      info = { isRepo: true, branch, stat, worktrees };
+    }
+  } catch (_) { info = { isRepo: false, branch: '', stat: null, worktrees: [] }; }
   gitInfoCache.set(dir, { at: Date.now(), info });
   return info;
 }
