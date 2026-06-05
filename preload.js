@@ -13,4 +13,7 @@ contextBridge.exposeInMainWorld('deck', {
   isRepo: (dir) => ipcRenderer.invoke('git:isRepo', { dir }),
   openDir: () => ipcRenderer.invoke('dialog:openDir'),
   appInfo: () => ipcRenderer.invoke('app:info'),
+  reposList: () => ipcRenderer.invoke('repos:list'),
+  reposAdd: (dir) => ipcRenderer.invoke('repos:add', { path: dir }),
+  reposRemove: (id) => ipcRenderer.invoke('repos:remove', { id }),
 });

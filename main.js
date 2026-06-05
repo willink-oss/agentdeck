@@ -8,6 +8,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const pty = require('node-pty');
 const { defaultShell, sanitizeBranch, worktreeFolderName } = require('./lib/git-utils');
+const Repos = require('./lib/repos');
 
 const pexec = promisify(execFile);
 
@@ -30,6 +31,44 @@ async function headSha(dir) { return (await git(['rev-parse', 'HEAD'], dir)).tri
 async function currentBranch(dir) {
   try { return (await git(['rev-parse', '--abbrev-ref', 'HEAD'], dir)).trim(); }
   catch (_) { return ''; }
+}
+
+// ---- repository registry (persisted under userData) ------------------------
+function reposFile() { return path.join(app.getPath('userData'), 'repos.json'); }
+function loadRepos() {
+  try { const v = JSON.parse(fs.readFileSync(reposFile(), 'utf8')); return Array.isArray(v) ? v : []; }
+  catch (_) { return []; }
+}
+// Atomic write (temp + rename) so a crash mid-write can't corrupt the registry.
+// Throws on failure so callers can surface it instead of a phantom success.
+function saveRepos(list) {
+  const file = reposFile();
+  const tmp = file + '.tmp';
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    try { fs.rmSync(tmp, { force: true }); } catch (_) {} // don't leave a stray temp behind
+    throw err;
+  }
+}
+
+const GIT_INFO_TTL = 4000;
+const gitInfoCache = new Map(); // path -> { at, info }
+async function gitInfoFor(dir) {
+  const hit = gitInfoCache.get(dir);
+  if (hit && (Date.now() - hit.at) < GIT_INFO_TTL) return hit.info;
+  let info;
+  try {
+    info = (await isRepo(dir))
+      ? { isRepo: true, branch: await currentBranch(dir) }
+      : { isRepo: false, branch: '' };
+  } catch (_) { info = { isRepo: false, branch: '' }; }
+  gitInfoCache.set(dir, { at: Date.now(), info });
+  return info;
+}
+async function enrichRepos(list) {
+  return Promise.all(list.map(async (r) => ({ ...r, ...(await gitInfoFor(r.path)) })));
 }
 
 // ---- window ----------------------------------------------------------------
@@ -138,6 +177,25 @@ ipcMain.handle('git:diff', async (_e, { cwd, baseRef }) => {
 });
 
 ipcMain.handle('git:isRepo', async (_e, { dir }) => ({ repo: await isRepo(dir) }));
+
+// ---- IPC: repository registry ----------------------------------------------
+ipcMain.handle('repos:list', async () => ({ ok: true, repos: await enrichRepos(loadRepos()) }));
+ipcMain.handle('repos:add', async (_e, { path: dir }) => {
+  const list = Repos.addRepo(loadRepos(), dir);
+  try { saveRepos(list); }
+  catch (err) {
+    return { ok: false, error: String((err && err.message) || err), repos: await enrichRepos(loadRepos()) };
+  }
+  return { ok: true, repos: await enrichRepos(list) };
+});
+ipcMain.handle('repos:remove', async (_e, { id }) => {
+  const list = Repos.removeRepo(loadRepos(), id);
+  try { saveRepos(list); }
+  catch (err) {
+    return { ok: false, error: String((err && err.message) || err), repos: await enrichRepos(loadRepos()) };
+  }
+  return { ok: true, repos: await enrichRepos(list) };
+});
 
 // ---- IPC: misc -------------------------------------------------------------
 ipcMain.handle('dialog:openDir', async () => {

@@ -11,6 +11,19 @@
 </head>
 <body>
   <div id="app">
+    <aside id="repos">
+      <div class="repos-head">
+        <span class="repos-title">Repositories</span>
+        <button type="button" id="repo-add" title="Add repository (folder)">+</button>
+      </div>
+      <div id="repo-msg" class="repo-msg" hidden></div>
+      <div id="repo-list" class="repo-list"></div>
+      <div id="repo-empty" class="repo-empty">
+        <p>リポジトリ未登録</p>
+        <p class="repo-empty-sub">＋ でローカルフォルダを追加</p>
+      </div>
+    </aside>
+
     <aside id="sidebar">
       <div class="brand">
         <span class="brand-mark">&#x259A;</span>
@@ -110,6 +123,7 @@
   <script src="../node_modules/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
   <script src="../lib/diff.js"></script>
   <script src="../lib/attention.js"></script>
+  <script src="../lib/repos.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
