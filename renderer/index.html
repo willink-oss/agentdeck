@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <title>Agent Deck</title>
+  <link rel="stylesheet" href="../node_modules/xterm/css/xterm.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">
+        <span class="brand-mark">&#x259A;</span>
+        <div class="brand-text">
+          <h1>AGENT&middot;DECK</h1>
+          <p>parallel agent terminals</p>
+        </div>
+      </div>
+
+      <form id="launch-form" autocomplete="off">
+        <label class="field">
+          <span class="field-label">Agent</span>
+          <select id="preset"></select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Startup command</span>
+          <input id="command" type="text" spellcheck="false" placeholder="claude" />
+          <span class="field-hint">セッション起動時に自動実行されます</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Name <em>(optional)</em></span>
+          <input id="name" type="text" spellcheck="false" placeholder="auto" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Working directory</span>
+          <div class="dir-row">
+            <input id="cwd" type="text" spellcheck="false" placeholder="~" />
+            <button type="button" id="browse" title="Browse">&hellip;</button>
+          </div>
+          <span class="field-hint" id="repo-hint"></span>
+        </label>
+
+        <div class="field wt-field">
+          <label class="toggle">
+            <input id="wt-enable" type="checkbox" />
+            <span>Isolate in git worktree</span>
+          </label>
+          <input id="wt-branch" type="text" spellcheck="false" placeholder="agentdeck/branch-name" disabled />
+          <span class="field-hint">新規ブランチ＋作業ツリーで隔離起動（競合防止）</span>
+        </div>
+
+        <button type="submit" id="launch">&#9654; Launch agent</button>
+      </form>
+
+      <div class="quick">
+        <span class="quick-label">Quick launch</span>
+        <div class="quick-chips" id="quick-chips"></div>
+      </div>
+
+      <div class="legend">
+        <span><i class="dot live"></i>live</span>
+        <span><i class="dot waiting"></i>attention</span>
+        <span><i class="dot"></i>exited</span>
+      </div>
+
+      <div class="sidebar-foot">
+        <div id="sys-info">&mdash;</div>
+        <div id="count">0 sessions</div>
+      </div>
+    </aside>
+
+    <main id="stage">
+      <div id="empty" class="empty">
+        <div class="empty-inner">
+          <span class="empty-mark">&#x259A;&#x259A;&#x259A;</span>
+          <h2>No agents running</h2>
+          <p>左のパネルからエージェントを起動すると、ここにターミナルが並びます。<br />
+             複数立ち上げれば並列で監視できます。</p>
+        </div>
+      </div>
+      <div id="grid"></div>
+    </main>
+  </div>
+
+  <div id="diff-overlay" class="diff-overlay" hidden>
+    <div class="diff-backdrop" id="diff-backdrop"></div>
+    <div class="diff-panel">
+      <div class="diff-head">
+        <div class="diff-title">
+          <span id="diff-name">Diff</span>
+          <span id="diff-branch" class="pane-badge"></span>
+        </div>
+        <div class="diff-actions">
+          <button id="diff-refresh" class="ghost-btn">refresh</button>
+          <button id="diff-close" class="ghost-btn">close</button>
+        </div>
+      </div>
+      <div id="diff-meta" class="diff-meta"></div>
+      <pre id="diff-body" class="diff-body"></pre>
+    </div>
+  </div>
+
+  <script src="../node_modules/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+  <script src="../lib/diff.js"></script>
+  <script src="../lib/attention.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
