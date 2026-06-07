@@ -3,6 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   normalizePath, repoNameFromPath, makeRepo, addRepo, removeRepo, findRepo,
+  effectiveRepos, findEff,
 } = require('../lib/repos');
 
 test('normalizePath: strips trailing separators', () => {
@@ -92,4 +93,33 @@ test('findRepo: returns entry or null', () => {
   assert.equal(findRepo(list, '/a/b').name, 'b');
   assert.equal(findRepo(list, '/x'), null);
   assert.equal(findRepo(null, '/x'), null);
+});
+
+const HOME = { id: '/home', path: '/home', name: 'Home', isHome: true };
+
+test('effectiveRepos: pins the synthetic entry first; bare list when none', () => {
+  const list = addRepo(addRepo([], '/a/b'), '/c/d');
+  assert.deepEqual(effectiveRepos(list, null).map((r) => r.id), ['/a/b', '/c/d']);
+  assert.deepEqual(effectiveRepos(list, HOME).map((r) => r.id), ['/home', '/a/b', '/c/d']);
+});
+
+test('effectiveRepos: de-dups a persisted entry colliding with the pinned id (pinned wins, once)', () => {
+  const list = addRepo(addRepo([], '/home'), '/c/d');
+  const eff = effectiveRepos(list, HOME);
+  assert.deepEqual(eff.map((r) => r.id), ['/home', '/c/d']);
+  assert.equal(eff[0].isHome, true); // the synthetic entry, not the persisted dup
+});
+
+test('effectiveRepos: does not mutate the input list', () => {
+  const list = addRepo([], '/a/b');
+  effectiveRepos(list, HOME);
+  assert.equal(list.length, 1);
+});
+
+test('findEff: pinned wins on collision, falls back to findRepo, null on miss', () => {
+  const list = addRepo(addRepo([], '/home'), '/c/d');
+  assert.equal(findEff(list, HOME, '/home').isHome, true); // synthetic wins
+  assert.equal(findEff(list, HOME, '/c/d').id, '/c/d');     // persisted found
+  assert.equal(findEff(list, HOME, '/nope'), null);         // miss
+  assert.equal(findEff(list, null, '/c/d').id, '/c/d');     // no pinned -> findRepo
 });

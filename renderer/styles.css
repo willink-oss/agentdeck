@@ -81,6 +81,8 @@ html, body {
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s;
 }
+.repo-item.is-home { border-bottom: 1px solid var(--line-soft); border-radius: 6px 6px 0 0; margin-bottom: 2px; }
+.repo-home-icon { color: var(--accent-soft); flex: none; font-size: 13px; line-height: 1; }
 .repo-item:hover { background: var(--bg-panel-2); }
 .repo-item.active { background: var(--bg-panel-2); border-color: rgba(240,136,62,0.45); }
 
@@ -262,6 +264,22 @@ select { appearance: none; cursor: pointer; }
 
 /* ---------- Stage ---------- */
 #stage { position: relative; overflow: hidden; background: var(--bg); }
+
+/* repo focus-filter pill (floats over the grid) */
+.stage-filter {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  z-index: 30; display: flex; align-items: center; gap: 10px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 5px 4px 13px; font-size: 11px; color: var(--text-dim);
+  box-shadow: 0 6px 22px rgba(0,0,0,0.45);
+}
+.stage-filter[hidden] { display: none; } /* class display:flex would otherwise beat [hidden] */
+.sf-all {
+  background: var(--bg-panel-2); border: 1px solid var(--line); border-radius: 999px;
+  color: var(--text-dim); cursor: pointer; font-family: var(--mono); font-size: 10.5px;
+  padding: 3px 10px; transition: all 0.12s;
+}
+.sf-all:hover { color: var(--text); border-color: var(--accent); }
 
 .empty {
   position: absolute; inset: 0;

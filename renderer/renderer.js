@@ -40,6 +40,14 @@ const sysInfoEl = $('#sys-info');
 const repoListEl = $('#repo-list');
 const repoEmptyEl = $('#repo-empty');
 const repoMsgEl = $('#repo-msg');
+const launchBtn = $('#launch');
+const stageFilterEl = $('#stage-filter');
+const stageFilterLabel = $('#stage-filter-label');
+const stageAllBtn = $('#stage-all');
+const emptyTitleEl = $('#empty h2');
+const emptyDescEl = $('#empty p');
+const EMPTY_DEFAULT_TITLE = emptyTitleEl ? emptyTitleEl.textContent : 'No agents running';
+const EMPTY_DEFAULT_DESC = emptyDescEl ? emptyDescEl.innerHTML : '';
 
 // diff drawer refs
 const diffOverlay = $('#diff-overlay');
@@ -56,6 +64,10 @@ let windowFocused = true;
 /** Registered repositories (persisted in main). @type {Array<{id,path,name,isRepo,branch}>} */
 let repos = [];
 let activeRepoId = null;
+let homeDir = '';
+/** Synthetic, always-pinned "Home" entry so CLIs can run in the home directory
+ *  without registering a repo (e.g. operating on the whole computer). Not persisted. */
+let homeRepo = null;
 
 window.addEventListener('focus', () => { windowFocused = true; });
 window.addEventListener('blur', () => { windowFocused = false; });
@@ -99,17 +111,18 @@ async function refreshRepoHint() {
   } catch (_) { repoHint.textContent = ''; }
 }
 
-$('#launch-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  launch({
+/** Read the launch form into a launch() options object (optional cwd override). */
+function currentLaunchOpts(cwdOverride) {
+  return {
     presetKey: presetSel.value,
     command: commandInput.value,
     name: nameInput.value.trim(),
-    cwd: cwdInput.value.trim(),
+    cwd: (cwdOverride != null ? cwdOverride : cwdInput.value.trim()),
     worktree: wtEnable.checked,
     branch: wtBranch.value.trim(),
-  });
-});
+  };
+}
+$('#launch-form').addEventListener('submit', (e) => { e.preventDefault(); launch(currentLaunchOpts()); });
 
 // ---- repository panel ------------------------------------------------------
 /* Share the path-normalisation logic with main (lib/repos.js, loaded via <script>)
@@ -117,8 +130,12 @@ $('#launch-form').addEventListener('submit', (e) => {
 const Repos = window.Repos;
 const GitStat = window.GitStat;
 function normRepoPath(p) { return Repos.normalizePath(p); }
+/** Persisted repos plus the pinned synthetic Home entry (Home first, deduped).
+ *  Pure list logic lives in lib/repos.js (CI-covered); these just bind state. */
+function effectiveRepos() { return Repos.effectiveRepos(repos, homeRepo); }
+function findEff(id) { return Repos.findEff(repos, homeRepo, id); }
 function repoIdForCwd(dir) {
-  const hit = Repos.findRepo(repos, normRepoPath(dir));
+  const hit = findEff(normRepoPath(dir));
   return hit ? hit.id : null;
 }
 /** Re-derive every live session's repoId from its launch dir, so sessions snap
@@ -150,12 +167,18 @@ async function loadReposUI() {
 async function addRepoFlow() {
   const dir = await window.deck.openDir();
   if (!dir) return;
+  // The home dir is already pinned as the synthetic Home entry; registering it
+  // would persist a duplicate that Home shadows and hides the remove button on.
+  if (homeRepo && normRepoPath(dir) === homeRepo.id) {
+    flashRepoMsg('ホームディレクトリは常に「Home」として表示されています。'); return;
+  }
   const res = await window.deck.reposAdd(dir);
   setRepos((res && res.repos) || []);
   retagSessions();
   if (res && res.ok === false) { flashRepoMsg('リポジトリの保存に失敗しました: ' + (res.error || '')); renderRepos(); return; }
+  renderRepos();
   const added = Repos.findRepo(repos, normRepoPath(dir));
-  if (added) selectRepo(added.id); else renderRepos();
+  if (added) selectRepo(added.id);
 }
 async function removeRepoFromList(id) {
   const res = await window.deck.reposRemove(id);
@@ -177,11 +200,57 @@ async function refreshReposGit() {
   retagSessions();
   renderRepos();
 }
+function updateLaunchLabel() {
+  const r = activeRepoId ? findEff(activeRepoId) : null;
+  launchBtn.textContent = r ? `▶ ${r.name} で起動` : '▶ Launch agent';
+}
+function updateActiveHighlight() {
+  for (const el of repoListEl.querySelectorAll('.repo-item[data-repo-id]')) {
+    el.classList.toggle('active', el.dataset.repoId === activeRepoId);
+  }
+}
+function setEmptyState(filteredRepoName) {
+  if (filteredRepoName == null) {
+    emptyTitleEl.textContent = EMPTY_DEFAULT_TITLE;
+    emptyDescEl.innerHTML = EMPTY_DEFAULT_DESC;
+  } else {
+    emptyTitleEl.textContent = filteredRepoName;
+    emptyDescEl.textContent = 'このリポジトリには起動中のエージェントがありません。▶ Launch で起動できます。';
+  }
+}
+/** Apply the repo focus-filter to the terminal grid, the filter pill, and the empty state. */
+function updateStage() {
+  let total = 0, visible = 0;
+  for (const s of sessions.values()) {
+    total++;
+    const show = !activeRepoId || s.repoId === activeRepoId;
+    s.el.style.display = show ? '' : 'none';
+    if (show) visible++;
+  }
+  const r = activeRepoId ? findEff(activeRepoId) : null;
+  if (r && total > 0 && visible < total) {
+    stageFilterLabel.textContent = `▦ ${r.name} のみ表示中`;
+    stageFilterEl.hidden = false;
+  } else {
+    stageFilterEl.hidden = true;
+  }
+  if (total === 0) { setEmptyState(null); emptyState.style.display = 'flex'; }
+  else if (visible === 0) { setEmptyState(r ? r.name : null); emptyState.style.display = 'flex'; }
+  else { emptyState.style.display = 'none'; }
+}
+function clearRepoSelection() {
+  activeRepoId = null;
+  updateActiveHighlight();
+  updateLaunchLabel();
+  updateStage();
+}
 function selectRepo(id) {
   activeRepoId = id;
-  const r = Repos.findRepo(repos, id);
+  const r = findEff(id);
   if (r) { cwdInput.value = r.path; refreshRepoHint(); }
-  renderRepos();
+  updateActiveHighlight();
+  updateLaunchLabel();
+  updateStage();
 }
 function focusSession(id) {
   const s = sessions.get(id);
@@ -197,7 +266,7 @@ let repoRowEls = new Map();   // session id -> session row element
 let repoBadgeEls = new Map(); // group key   -> repo count badge element
 
 function groupKeyForSession(s) {
-  return (s.repoId && Repos.findRepo(repos, s.repoId)) ? s.repoId : '';
+  return (s.repoId && findEff(s.repoId)) ? s.repoId : '';
 }
 function sessionDotClass(s) {
   return 'status-dot' + (s.alive ? (s.attention ? ' waiting' : ' live') : '');
@@ -257,13 +326,18 @@ function worktreeRow(w) {
   return row;
 }
 /** Build one group box — a registered repo, or the orphan "Other" group. */
-function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees, sessList }) {
+function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees, home, sessList }) {
   const item = document.createElement('div');
-  item.className = 'repo-item' + (repoId && repoId === activeRepoId ? ' active' : '');
+  item.className = 'repo-item' + (repoId && repoId === activeRepoId ? ' active' : '') + (home ? ' is-home' : '');
   if (repoId) item.dataset.repoId = repoId;
 
   const row = document.createElement('div');
   row.className = 'repo-row';
+  if (home) {
+    const ic = document.createElement('span');
+    ic.className = 'repo-home-icon'; ic.textContent = '⌂';
+    row.appendChild(ic);
+  }
   const nameEl = document.createElement('span');
   nameEl.className = 'repo-name';
   nameEl.textContent = name;
@@ -286,7 +360,7 @@ function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees,
     row.appendChild(c);
     repoBadgeEls.set(key, c);
   }
-  if (repoId) {
+  if (repoId && !home) {
     const rm = document.createElement('button');
     rm.className = 'repo-remove';
     rm.textContent = '×';
@@ -314,7 +388,11 @@ function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees,
     for (const [id, s] of sessList) wrap.appendChild(sessionRow(id, s));
     item.appendChild(wrap);
   }
-  if (repoId) item.addEventListener('click', () => selectRepo(repoId));
+  if (repoId) {
+    item.addEventListener('click', () => selectRepo(repoId));
+    // double-click = launch the current Agent straight into this repo
+    item.addEventListener('dblclick', () => { selectRepo(repoId); launch(currentLaunchOpts(path)); });
+  }
   return item;
 }
 /** Full structural rebuild — use on add/remove/select repo and launch/kill session. */
@@ -324,17 +402,19 @@ function renderRepos() {
   repoListEl.innerHTML = '';
   repoEmptyEl.style.display = repos.length ? 'none' : 'block';
   const byRepo = sessionsByRepo();
-  for (const repo of repos) {
+  for (const repo of effectiveRepos()) {
     repoListEl.appendChild(buildGroup({
       key: repo.id, name: repo.name, path: repo.path, branch: repo.branch,
       repoId: repo.id, stat: repo.stat, worktrees: repo.worktrees,
-      sessList: byRepo.get(repo.id) || [],
+      home: !!repo.isHome, sessList: byRepo.get(repo.id) || [],
     }));
   }
   const orphans = byRepo.get('') || [];
   if (orphans.length) {
     repoListEl.appendChild(buildGroup({ key: '', name: 'Other', nameDim: true, sessList: orphans }));
   }
+  updateLaunchLabel();
+  updateStage();
 }
 /** In-place update for attention/exit transitions — avoids a full tree rebuild. */
 function refreshSessionState(s) {
@@ -357,6 +437,7 @@ function refreshSessionState(s) {
 
 $('#repo-add').addEventListener('click', addRepoFlow);
 $('#repo-refresh').addEventListener('click', refreshReposGit);
+stageAllBtn.addEventListener('click', clearRepoSelection);
 setInterval(refreshReposGit, 7000);
 window.addEventListener('focus', refreshReposGit);
 
@@ -468,8 +549,7 @@ function killSession(id) {
   if (diffSessionId === id) closeDiff();
   updateCount();
   updateWaitingTitle();
-  renderRepos();
-  if (sessions.size === 0) emptyState.style.display = 'flex';
+  renderRepos(); // -> updateStage() restores empty state / clears filter pill as needed
 }
 
 function setExited(id) {
@@ -594,14 +674,16 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !diffOverl
 (async function boot() {
   buildPresetOptions();
   buildQuickChips();
-  loadReposUI();
   try {
     const info = await window.deck.appInfo();
+    homeDir = info.home;
+    homeRepo = { id: normRepoPath(homeDir), path: homeDir, name: 'Home', isHome: true };
     cwdInput.value = info.home;
     cwdInput.placeholder = info.home;
     sysInfoEl.textContent = `${info.platform} · ${info.defaultShell.split(/[\\/]/).pop()}`;
     refreshRepoHint();
   } catch (_) { sysInfoEl.textContent = '—'; }
+  await loadReposUI();
   if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
     try { Notification.requestPermission(); } catch (_) {}
   }
