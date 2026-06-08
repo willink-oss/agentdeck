@@ -91,4 +91,8 @@ for sz in sizes:
     for nm in names[sz]:
         im.save(os.path.join(iconset, nm))
 subprocess.run(["iconutil", "-c", "icns", iconset, "-o", os.path.join(HERE, "icon.icns")], check=True)
-print("wrote", os.path.join(HERE, "icon.icns"))
+
+# --- Linux (.png 512) + Windows (.ico, multi-size) ---
+img.resize((512, 512), Image.LANCZOS).save(os.path.join(HERE, "icon.png"))
+img.save(os.path.join(HERE, "icon.ico"), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+print("wrote", os.path.join(HERE, "icon.icns"), "+ icon.png + icon.ico")

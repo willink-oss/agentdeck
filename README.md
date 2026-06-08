@@ -24,15 +24,20 @@
 
 ---
 
-## ダウンロード（macOS）
+## ダウンロード
 
-最新版は [Releases](https://github.com/willink-oss/agentdeck/releases) から `.dmg` を取得してください（Apple Silicon / arm64）。
+最新版は [Releases](https://github.com/willink-oss/agentdeck/releases) から取得してください。
+バージョンタグを切ると CI が各 OS の成果物を自動ビルドして添付します（[RELEASE.md](RELEASE.md)）。
 
-> ⚠️ **未署名の OSS 配布**です（GitHub Releases が正本）。初回起動時に Gatekeeper の警告（「開発元を確認できません」）が出ます。
-> **右クリック → 開く**、または **システム設定 → プライバシーとセキュリティ → このまま開く** で起動してください。
-> Apple Developer ID 署名・公証および App Store 配布は予定していません（App Store はサンドボックスとシェル起動が非互換のため非対応）。
+| OS | ファイル | 初回起動 |
+|---|---|---|
+| **macOS** (Apple Silicon / arm64) | `.dmg` | Gatekeeper 警告 → **右クリック → 開く**（または `xattr -dr com.apple.quarantine`） |
+| **Windows** (x64) | `.exe`（インストーラ） | SmartScreen → **詳細情報 → 実行** |
+| **Linux** (x64) | `.AppImage` / `.deb` | AppImage は `chmod +x` で実行（要 `libfuse2`）／deb は `apt install ./…deb` |
 
-アプリは GitHub Releases を参照して起動時にアップデートの有無を通知します（自動更新はしません）。
+> ⚠️ **未署名の OSS 配布**です（GitHub Releases が正本）。上記の初回起動手順で開けます。
+> Apple Developer ID 署名・公証や App Store 配布は予定していません（App Store はサンドボックスとシェル起動が非互換のため非対応）。
+> アプリは起動時に Releases を参照してアップデートの有無を通知します（自動更新はしません）。
 
 ---
 

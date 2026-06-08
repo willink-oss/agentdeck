@@ -1,0 +1,43 @@
+name: Release
+
+# Build per-OS installers on a version tag and attach them to that GitHub Release.
+# Native deps (node-pty) can only be built on their target OS, hence the matrix.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest      # unsigned .dmg (arm64) — matches the current OSS distribution
+            build: npm run pack:unsigned
+          - os: windows-latest     # NSIS .exe (x64)
+            build: npm run dist:win
+          - os: ubuntu-latest      # AppImage + .deb (x64)
+            build: npm run dist:linux
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Build installers
+        run: ${{ matrix.build }}
+      - name: Attach installers to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/*.dmg
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
