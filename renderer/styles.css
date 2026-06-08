@@ -512,6 +512,20 @@ select { appearance: none; cursor: pointer; }
 .palette-empty { padding: 14px 12px; font-size: 12px; color: var(--text-faint); text-align: center; }
 .palette-foot { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 10px; color: var(--text-faint); }
 
+/* terminal right-click menu */
+.term-menu {
+  position: fixed; z-index: 70; min-width: 150px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 7px;
+  padding: 5px; box-shadow: 0 12px 34px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column;
+}
+.term-menu[hidden] { display: none; }
+.term-menu button {
+  text-align: left; background: transparent; border: none; border-radius: 5px;
+  color: var(--text-dim); cursor: pointer; font-family: var(--mono); font-size: 12px; padding: 7px 12px;
+}
+.term-menu button:hover { background: var(--bg-panel-2); color: var(--text); }
+
 .diff-overlay { position: fixed; inset: 0; z-index: 50; }
 .diff-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
 .diff-panel {

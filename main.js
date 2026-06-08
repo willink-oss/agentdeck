@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -262,6 +262,10 @@ ipcMain.handle('dialog:openDir', async () => {
 ipcMain.handle('app:info', () => ({
   platform: process.platform, home: os.homedir(), defaultShell: shellForHost(),
 }));
+
+// ---- IPC: clipboard (terminal copy/paste) ----------------------------------
+ipcMain.handle('clipboard:write', (_e, text) => { clipboard.writeText(String(text == null ? '' : text)); return true; });
+ipcMain.handle('clipboard:read', () => clipboard.readText());
 
 // ---- update check (manual distribution: we only check the feed + notify) ----
 const RELEASES_PAGE = 'https://github.com/willink-oss/agentdeck/releases';

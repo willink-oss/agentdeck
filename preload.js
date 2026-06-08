@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('deck', {
   reposList: () => ipcRenderer.invoke('repos:list'),
   reposAdd: (dir) => ipcRenderer.invoke('repos:add', { path: dir }),
   reposRemove: (id) => ipcRenderer.invoke('repos:remove', { id }),
+  clipboardWrite: (text) => ipcRenderer.invoke('clipboard:write', text),
+  clipboardRead: () => ipcRenderer.invoke('clipboard:read'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_e, p) => cb(p)),
   openExternal: (url) => ipcRenderer.send('update:open', url),

@@ -615,6 +615,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   const setActive = () => { markActive(id); clearAttention(s); };
   pane.addEventListener('mousedown', setActive);
   termHost.addEventListener('focusin', setActive);
+  termHost.addEventListener('contextmenu', (e) => { e.preventDefault(); markActive(id); openTermMenu(id, e.clientX, e.clientY); });
 
   head.querySelector('.pane-kill').addEventListener('click', () => killSession(id));
   const diffBtn = head.querySelector('.pane-diff');
@@ -833,8 +834,22 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'Enter') { e.preventDefault(); launch(currentLaunchOpts()); }
   else if (e.key === 'w' || e.key === 'W') {
     if (activeSessionId && sessions.has(activeSessionId)) { e.preventDefault(); killSession(activeSessionId); }
+  } else if (e.key === 'c' || e.key === 'C') {
+    // copy the terminal's visual selection (xterm's selection isn't in the textarea, so ⌘C wouldn't catch it)
+    const s = focusedSession();
+    if (s && s.term.hasSelection()) { e.preventDefault(); window.deck.clipboardWrite(s.term.getSelection()); }
+  } else if (e.key === 'a' || e.key === 'A') {
+    const s = focusedSession();
+    if (s) { e.preventDefault(); s.term.selectAll(); }
   }
 });
+/** The session whose terminal currently holds keyboard focus, or null. */
+function focusedSession() {
+  const ae = document.activeElement;
+  if (!ae || !ae.classList || !ae.classList.contains('xterm-helper-textarea')) return null;
+  const pane = ae.closest ? ae.closest('.pane') : null;
+  return pane ? sessions.get(pane.dataset.id) : null;
+}
 
 // ---- inline session rename (double-click the pane name) --------------------
 function renameSession(id, name) {
@@ -956,6 +971,34 @@ paletteInput.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
 });
 $('#palette-backdrop').addEventListener('click', closePalette);
+
+// ---- terminal context menu (right-click: copy / paste / select all / clear) ----
+const termMenu = $('#term-menu');
+let termMenuSession = null;
+function openTermMenu(id, x, y) {
+  termMenuSession = id;
+  termMenu.hidden = false;
+  const mw = termMenu.offsetWidth || 150, mh = termMenu.offsetHeight || 140;
+  termMenu.style.left = Math.max(6, Math.min(x, window.innerWidth - mw - 6)) + 'px';
+  termMenu.style.top = Math.max(6, Math.min(y, window.innerHeight - mh - 6)) + 'px';
+}
+function closeTermMenu() { termMenu.hidden = true; termMenuSession = null; }
+async function termMenuAction(act) {
+  const s = sessions.get(termMenuSession);
+  closeTermMenu();
+  if (!s) return;
+  if (act === 'copy') { const sel = s.term.getSelection(); if (sel) window.deck.clipboardWrite(sel); }
+  else if (act === 'paste') { const t = await window.deck.clipboardRead(); if (t) window.deck.input(s.id, t); }
+  else if (act === 'selectall') { focusSession(s.id); s.term.selectAll(); }
+  else if (act === 'clear') { s.term.clear(); }
+}
+termMenu.addEventListener('click', (e) => { const b = e.target.closest('button[data-act]'); if (b) termMenuAction(b.dataset.act); });
+termMenu.addEventListener('contextmenu', (e) => e.preventDefault());
+window.addEventListener('click', () => { if (!termMenu.hidden) closeTermMenu(); });
+// capture phase: the focused xterm consumes Escape as terminal input, so intercept it first
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !termMenu.hidden) { e.preventDefault(); e.stopPropagation(); closeTermMenu(); }
+}, true);
 
 // ---- boot ------------------------------------------------------------------
 (async function boot() {
