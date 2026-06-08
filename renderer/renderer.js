@@ -44,6 +44,7 @@ const launchBtn = $('#launch');
 const stageFilterEl = $('#stage-filter');
 const stageFilterLabel = $('#stage-filter-label');
 const stageAllBtn = $('#stage-all');
+const layoutSwitchEl = $('#layout-switch');
 const emptyTitleEl = $('#empty h2');
 const emptyDescEl = $('#empty p');
 const EMPTY_DEFAULT_TITLE = emptyTitleEl ? emptyTitleEl.textContent : 'No agents running';
@@ -130,6 +131,7 @@ $('#launch-form').addEventListener('submit', (e) => { e.preventDefault(); launch
    so repo ids computed here and in the main process can never drift. */
 const Repos = window.Repos;
 const GitStat = window.GitStat;
+const Layout = window.Layout;
 function normRepoPath(p) { return Repos.normalizePath(p); }
 /** Persisted repos plus the pinned synthetic Home entry (Home first, deduped).
  *  Pure list logic lives in lib/repos.js (CI-covered); these just bind state. */
@@ -439,6 +441,22 @@ function refreshSessionState(s) {
 $('#repo-add').addEventListener('click', addRepoFlow);
 $('#repo-refresh').addEventListener('click', refreshReposGit);
 stageAllBtn.addEventListener('click', clearRepoSelection);
+
+// ---- grid layout (column count, persisted in localStorage) -----------------
+const LAYOUT_KEY = 'agentdeck.layout';
+let layoutMode = 'auto';
+function applyLayout(mode, persist) {
+  layoutMode = Layout.normalizeLayoutMode(mode);
+  grid.style.gridTemplateColumns = Layout.gridTemplateFor(layoutMode);
+  for (const b of layoutSwitchEl.querySelectorAll('.ls-btn')) b.classList.toggle('active', b.dataset.cols === layoutMode);
+  if (persist) { try { localStorage.setItem(LAYOUT_KEY, layoutMode); } catch (_) {} }
+}
+layoutSwitchEl.addEventListener('click', (e) => {
+  const b = e.target.closest('.ls-btn');
+  if (b) applyLayout(b.dataset.cols, true);
+});
+applyLayout((() => { try { return localStorage.getItem(LAYOUT_KEY); } catch (_) { return null; } })(), false);
+
 setInterval(refreshReposGit, 7000);
 window.addEventListener('focus', refreshReposGit);
 

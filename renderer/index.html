@@ -104,6 +104,12 @@
              複数立ち上げれば並列で監視できます。</p>
         </div>
       </div>
+      <div id="layout-switch" class="layout-switch" title="グリッドの列数">
+        <button type="button" class="ls-btn active" data-cols="auto">auto</button>
+        <button type="button" class="ls-btn" data-cols="1">1</button>
+        <button type="button" class="ls-btn" data-cols="2">2</button>
+        <button type="button" class="ls-btn" data-cols="3">3</button>
+      </div>
       <div id="grid"></div>
     </main>
   </div>
@@ -133,6 +139,7 @@
   <script src="../lib/attention.js"></script>
   <script src="../lib/repos.js"></script>
   <script src="../lib/gitstat.js"></script>
+  <script src="../lib/layout.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
