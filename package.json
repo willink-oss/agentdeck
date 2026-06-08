@@ -20,7 +20,44 @@
   "scripts": {
     "start": "electron .",
     "rebuild": "electron-rebuild -f -w node-pty",
-    "test": "node --test"
+    "test": "node --test",
+    "pack:unsigned": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 -c.mac.notarize=false",
+    "dist": "electron-builder --mac --arm64"
+  },
+  "build": {
+    "appId": "com.iwillink.agentdeck",
+    "productName": "Agent Deck",
+    "copyright": "© 2026 i-Willink",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": [
+      "**/*",
+      "!**/*.test.js",
+      "!test/**",
+      "!build/**",
+      "!dist/**",
+      "!.github/**",
+      "!.claude/**",
+      "!HANDOFF.md",
+      "!**/*.md"
+    ],
+    "asarUnpack": ["**/node_modules/node-pty/**"],
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["arm64"] }],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": { "teamId": "3VYV47MPQ4" }
+    },
+    "dmg": {
+      "title": "Agent Deck ${version}",
+      "contents": [
+        { "x": 140, "y": 210, "type": "file" },
+        { "x": 400, "y": 210, "type": "link", "path": "/Applications" }
+      ]
+    }
   },
   "dependencies": {
     "node-pty": "^1.0.0",
@@ -28,7 +65,8 @@
     "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
     "electron": "^31.0.0",
-    "@electron/rebuild": "^3.6.0"
+    "electron-builder": "^26.15.2"
   }
 }

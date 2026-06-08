@@ -316,6 +316,28 @@ select { appearance: none; cursor: pointer; }
 .restore-deck:hover { background: rgba(240,136,62,0.12); }
 .restore-deck[hidden] { display: none; }
 
+/* update-available toast (bottom-right) */
+.update-toast {
+  position: fixed; bottom: 16px; right: 16px; z-index: 100;
+  display: flex; align-items: center; gap: 10px; max-width: 380px;
+  background: var(--bg-elev); border: 1px solid var(--accent); border-radius: 10px;
+  padding: 10px 12px 10px 14px; font-size: 12px; color: var(--text);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.update-toast[hidden] { display: none; }
+.ut-mark { color: var(--accent-soft); font-weight: 700; flex: none; }
+#update-toast-text { flex: 1; min-width: 0; }
+.ut-btn {
+  flex: none; background: var(--accent); border: none; border-radius: 6px; color: #14110c;
+  cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 5px 12px;
+}
+.ut-btn:hover { background: var(--accent-soft); }
+.ut-dismiss {
+  flex: none; background: transparent; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px;
+}
+.ut-dismiss:hover { color: var(--text); }
+
 #grid {
   flex: 1;
   min-height: 0;

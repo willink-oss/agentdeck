@@ -41,6 +41,18 @@ npm test       # = node --test  （test/*.test.js を実行）
 
 CI（GitHub Actions）は ubuntu / macOS / windows のマトリクスで `node --test` を実行します。
 
+## ビルド・配布（macOS / arm64）
+
+`electron-builder` で **.dmg** を生成します（node-pty は asar 外に展開して同梱）。
+
+```bash
+npm run pack:unsigned   # 未署名 .dmg（動作確認用・即配布も可）
+npm run dist            # 署名＋公証 .dmg（Developer ID 証明書＋公証用 env が必要）
+```
+
+署名・公証・GitHub Releases 公開・アプリ内アップデートチェックの詳細は **[RELEASE.md](RELEASE.md)** を参照。
+アプリは起動時と 6 時間ごとに Releases feed を確認し、新版があれば右下にダウンロード通知を出します（自動更新はしません）。
+
 ## 使い方
 
 1. **Agent** を選ぶ（Startup command 自動入力・編集可）

@@ -514,6 +514,19 @@ async function restoreWorkspace() {
 }
 restoreBtnEl.addEventListener('click', restoreWorkspace);
 
+// ---- update notification (main checks the feed; we just surface it) ---------
+const updateToast = $('#update-toast');
+const updateToastText = $('#update-toast-text');
+let updateUrl = '';
+function showUpdate(p) {
+  updateUrl = p.url || '';
+  updateToastText.textContent = `新しいバージョン v${p.latest} が利用できます（現在 v${p.current}）`;
+  updateToast.hidden = false;
+}
+window.deck.onUpdateAvailable(showUpdate);
+$('#update-download').addEventListener('click', () => { if (updateUrl) window.deck.openExternal(updateUrl); });
+$('#update-dismiss').addEventListener('click', () => { updateToast.hidden = true; });
+
 setInterval(refreshReposGit, 7000);
 window.addEventListener('focus', refreshReposGit);
 
@@ -795,4 +808,6 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !diffOverl
   if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
     try { Notification.requestPermission(); } catch (_) {}
   }
+  // trigger the initial update check now that the onUpdateAvailable listener is registered
+  try { window.deck.checkUpdate().catch(() => {}); } catch (_) {}
 })();

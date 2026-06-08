@@ -1,15 +1,17 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const https = require('https');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const pty = require('node-pty');
 const { defaultShell, sanitizeBranch, worktreeFolderName } = require('./lib/git-utils');
 const Repos = require('./lib/repos');
 const GitStat = require('./lib/gitstat');
+const Version = require('./lib/version');
 
 const pexec = promisify(execFile);
 
@@ -107,6 +109,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
+  scheduleUpdateChecks();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
@@ -259,3 +262,56 @@ ipcMain.handle('dialog:openDir', async () => {
 ipcMain.handle('app:info', () => ({
   platform: process.platform, home: os.homedir(), defaultShell: shellForHost(),
 }));
+
+// ---- update check (manual distribution: we only check the feed + notify) ----
+const RELEASES_PAGE = 'https://github.com/willink-labs/agentdeck/releases';
+const UPDATE_FEED = process.env.AGENTDECK_UPDATE_FEED
+  || 'https://api.github.com/repos/willink-labs/agentdeck/releases/latest';
+const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000; // re-check every 6h while running
+
+function fetchJson(url, redirects) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'AgentDeck-Updater', Accept: 'application/vnd.github+json' } }, (res) => {
+      const code = res.statusCode || 0;
+      if (code >= 300 && code < 400 && res.headers.location && (redirects || 0) < 5) {
+        res.resume(); resolve(fetchJson(res.headers.location, (redirects || 0) + 1)); return;
+      }
+      if (code !== 200) { res.resume(); reject(new Error('HTTP ' + code)); return; }
+      let data = ''; res.setEncoding('utf8');
+      res.on('data', (c) => { data += c; if (data.length > 2_000_000) req.destroy(new Error('response too large')); });
+      res.on('end', () => { try { resolve(JSON.parse(data)); } catch (e) { reject(e); } });
+    });
+    req.on('error', reject);
+    req.setTimeout(10000, () => req.destroy(new Error('timeout')));
+  });
+}
+
+/** Fetch the latest published version and, if newer than this build, notify the renderer. */
+async function checkForUpdate(win) {
+  const current = app.getVersion();
+  try {
+    const rel = await fetchJson(UPDATE_FEED);
+    const latestRaw = rel && (rel.tag_name || rel.name);
+    const url = (rel && rel.html_url) || RELEASES_PAGE;
+    if (latestRaw && Version.isNewer(latestRaw, current)) {
+      const latest = String(latestRaw).replace(/^v/i, '');
+      if (win && !win.isDestroyed()) win.webContents.send('update:available', { latest, url, current });
+      return { ok: true, update: true, latest, url, current };
+    }
+    return { ok: true, update: false, current, latest: latestRaw ? String(latestRaw).replace(/^v/i, '') : null };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err), current };
+  }
+}
+
+ipcMain.handle('update:check', () => checkForUpdate(BrowserWindow.getAllWindows()[0]));
+ipcMain.on('update:open', (_e, url) => {
+  shell.openExternal(typeof url === 'string' && /^https:\/\//.test(url) ? url : RELEASES_PAGE);
+});
+
+function scheduleUpdateChecks() {
+  // Resolve the live window each tick — on macOS the first window can be closed and
+  // recreated (app.activate), so a captured reference would go stale. The renderer
+  // triggers the initial check itself on boot (window.deck.checkUpdate()).
+  setInterval(() => checkForUpdate(BrowserWindow.getAllWindows()[0]), UPDATE_INTERVAL_MS);
+}

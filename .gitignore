@@ -7,3 +7,7 @@ out/
 
 # Claude Code agent memory (runtime state, not project content)
 .claude/agent-memory/
+
+# generated icon intermediates (build/icon.icns IS committed)
+build/icon.iconset/
+build/icon_master.png
