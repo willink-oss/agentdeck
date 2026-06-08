@@ -49,7 +49,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
-      "notarize": { "teamId": "3VYV47MPQ4" }
+      "notarize": true
     },
     "dmg": {
       "title": "Agent Deck ${version}",

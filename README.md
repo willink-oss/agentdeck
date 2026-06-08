@@ -1,5 +1,8 @@
 # Agent Deck
 
+[![CI](https://github.com/willink-labs/agentdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/willink-labs/agentdeck/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 複数のAI CLIエージェント（Claude Code / Antigravity / Codex / Gemini など）を、
 それぞれ独立したターミナルで**並列に**立ち上げて監視するデスクトップアプリです。
 
@@ -149,3 +152,13 @@ agentdeck/
 
 - diff からの **PR 作成**（ローカル `git merge` 導線は実装済み）
 - 配布を絞るなら Tauri + `portable-pty`（Rust）へ移植
+
+## コントリビュート / ライセンス
+
+- ライセンス: **MIT** — [LICENSE](LICENSE)
+- 開発・PR 規約: [CONTRIBUTING.md](CONTRIBUTING.md)
+- 行動規範: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- 脆弱性の報告: [SECURITY.md](SECURITY.md)
+- ビルド・配布（macOS）: [RELEASE.md](RELEASE.md)
+
+Issue / PR を歓迎します。1 PR = 1 トピック、`npm test` がグリーンであることをご確認ください。

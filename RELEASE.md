@@ -9,7 +9,7 @@ Agent Deck を **署名＋公証済み .dmg** としてビルドし、GitHub Rel
 
 ## 0. 前提（初回のみ）
 
-1. **Apple Developer Program** に加入（$99/年）。Team ID は `3VYV47MPQ4`（`package.json > build.mac.notarize.teamId`）。
+1. **Apple Developer Program** に加入（$99/年）。自分の **Team ID** を控える（`security find-identity -v -p codesigning` の証明書名末尾、または developer.apple.com → Membership で確認）。Team ID はビルド時に `APPLE_TEAM_ID` 環境変数で渡す（ソースにはハードコードしない / `package.json` は `notarize: true`）。
 2. **「Developer ID Application」証明書**を作成してログインキーチェーンへインストール
    - Xcode → Settings → Accounts → （Team 選択）→ *Manage Certificates* → 「＋」→ **Developer ID Application**
    - または developer.apple.com → Certificates → ＋ → *Developer ID Application* → ダウンロードしてダブルクリック
@@ -26,7 +26,7 @@ Agent Deck を **署名＋公証済み .dmg** としてビルドし、GitHub Rel
 ```bash
 export APPLE_ID="あなたのAppleID(メール)"
 export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"   # 上で発行したAppパスワード
-export APPLE_TEAM_ID="3VYV47MPQ4"
+export APPLE_TEAM_ID="あなたのTeamID"          # 例: ABCDE12345
 
 npm run dist
 ```

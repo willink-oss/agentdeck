@@ -5,8 +5,16 @@ out/
 *.log
 .agentdeck-worktrees/
 
-# Claude Code agent memory (runtime state, not project content)
-.claude/agent-memory/
+# secrets / local env (never commit)
+.env
+.env.*
+!.env.example
+
+# Claude Code agent state + local settings (runtime, not project content)
+.claude/
+
+# scratch handoff notes (throwaway, never commit)
+HANDOFF.md
 
 # generated icon intermediates (build/icon.icns IS committed)
 build/icon.iconset/
