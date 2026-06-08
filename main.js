@@ -196,6 +196,39 @@ ipcMain.handle('git:diff', async (_e, { cwd, baseRef }) => {
   }
 });
 
+// Merge a worktree-isolated session's branch back into the base branch checked
+// out at the repo root (local `git merge --no-ff`; no remote/PR). Conflicts abort
+// cleanly so the base tree is left untouched.
+ipcMain.handle('git:merge', async (_e, { root, branch, worktree }) => {
+  try {
+    if (!root || !branch) return { ok: false, error: 'merge には worktree セッション（ブランチ）が必要です。' };
+    const target = await currentBranch(root);
+    // `git rev-parse --abbrev-ref HEAD` prints the literal "HEAD" when detached (no error),
+    // so guard on that too — git forbids a real branch named "HEAD", making this unambiguous.
+    if (!target || target === 'HEAD') return { ok: false, error: 'ベースが detached HEAD のため merge 先ブランチを特定できません。' };
+    if (target === branch) return { ok: false, error: `ベースと同じブランチ (${branch}) には merge できません。` };
+    // Only committed history merges; tell apart "no commits yet" from "uncommitted work left in the session".
+    const ahead = parseInt((await git(['rev-list', '--count', `${target}..${branch}`], root)).trim(), 10) || 0;
+    if (ahead === 0) {
+      const dirty = worktree ? (await safeGit(['status', '--porcelain'], worktree)).trim() : '';
+      return dirty
+        ? { ok: false, error: 'worktree に未コミットの変更があります。セッション内で commit してから merge してください。' }
+        : { ok: false, error: '取り込む新しいコミットがありません。' };
+    }
+    let out;
+    try {
+      out = await git(['merge', '--no-ff', '-m', `Merge agentdeck session: ${branch}`, branch], root);
+    } catch (err) {
+      try { await git(['merge', '--abort'], root); } catch (_) {} // best-effort: leave base clean
+      const msg = (err && (err.stderr || err.message)) || String(err);
+      return { ok: false, error: 'merge 失敗（中断しました）: ' + String(msg).trim() };
+    }
+    return { ok: true, target, branch, ahead, summary: (out || '').trim() };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+});
+
 ipcMain.handle('git:isRepo', async (_e, { dir }) => ({ repo: await isRepo(dir) }));
 
 // ---- IPC: repository registry ----------------------------------------------

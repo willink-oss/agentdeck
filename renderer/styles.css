@@ -452,6 +452,10 @@ select { appearance: none; cursor: pointer; }
   font-size: 11px; padding: 5px 11px; transition: all 0.12s;
 }
 .ghost-btn:hover { color: var(--text); border-color: var(--accent); }
+#diff-merge { color: var(--accent); border-color: rgba(240,136,62,0.45); }
+#diff-merge:hover:not(:disabled) { background: rgba(240,136,62,0.12); border-color: var(--accent); color: var(--accent-soft); }
+#diff-merge:disabled { opacity: 0.5; cursor: default; }
+#diff-merge[hidden] { display: none; }
 
 .diff-meta {
   padding: 10px 16px; font-size: 11px; color: var(--text-dim);

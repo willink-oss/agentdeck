@@ -55,6 +55,7 @@ const diffName = $('#diff-name');
 const diffBranch = $('#diff-branch');
 const diffMeta = $('#diff-meta');
 const diffBody = $('#diff-body');
+const diffMerge = $('#diff-merge');
 let diffSessionId = null;
 
 let seq = 0;
@@ -492,7 +493,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   const s = {
     id, term, fit, el: pane, ro, name: displayName,
     alive: true, hasOutput: false, attention: false, lastData: Date.now(),
-    gitCwd: null, baseSha: null, branch: null,
+    gitCwd: null, baseSha: null, branch: null, gitRoot: null, worktreePath: null,
     repoId: repoIdForCwd(workdir), launchCwd: workdir,
   };
   sessions.set(id, s);
@@ -524,6 +525,8 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
     s.gitCwd = res.git.cwd;
     s.baseSha = res.git.baseSha;
     s.branch = res.git.branch;
+    s.gitRoot = res.git.root || null;        // present only for worktree-isolated sessions
+    s.worktreePath = res.git.worktree || null;
     if (res.git.worktree) {
       head.querySelector('.pane-cwd').textContent = `⌥ ${res.git.branch}`;
       head.querySelector('.pane-cwd').title = res.git.worktree;
@@ -637,6 +640,9 @@ async function openDiff(id) {
   clearAttention(s);
   diffName.textContent = s.name;
   diffBranch.textContent = s.branch || '';
+  // merge-to-base only makes sense for a worktree-isolated session (has its own branch + root)
+  diffMerge.hidden = !(s.gitRoot && s.branch);
+  diffMerge.disabled = false;
   diffOverlay.hidden = false;
   await renderDiff(s);
 }
@@ -667,6 +673,21 @@ $('#diff-backdrop').addEventListener('click', closeDiff);
 $('#diff-refresh').addEventListener('click', () => {
   const s = sessions.get(diffSessionId);
   if (s) renderDiff(s);
+});
+diffMerge.addEventListener('click', async () => {
+  const s = sessions.get(diffSessionId);
+  if (!s || !s.gitRoot || !s.branch) return;
+  if (!confirm(`セッションのブランチ「${s.branch}」をベースブランチへ merge します。よろしいですか？`)) return;
+  diffMerge.disabled = true;
+  diffMeta.textContent = `merging ${s.branch} …`;
+  const res = await window.deck.gitMerge({ root: s.gitRoot, branch: s.branch, worktree: s.worktreePath });
+  if (!res || !res.ok) {
+    diffMeta.textContent = '⚠ ' + (res ? res.error : 'merge failed');
+    diffMerge.disabled = false;
+    return;
+  }
+  diffMeta.textContent = `✓ merged ${res.ahead} commit(s): ${res.branch} → ${res.target}`;
+  refreshReposGit(); // base branch advanced → refresh sidebar git stats
 });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !diffOverlay.hidden) closeDiff(); });
 
