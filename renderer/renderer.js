@@ -61,6 +61,7 @@ const diffBranch = $('#diff-branch');
 const diffMeta = $('#diff-meta');
 const diffBody = $('#diff-body');
 const diffMerge = $('#diff-merge');
+const diffPr = $('#diff-pr');
 let diffSessionId = null;
 
 let seq = 0;
@@ -756,9 +757,9 @@ async function openDiff(id) {
   clearAttention(s);
   diffName.textContent = s.name;
   diffBranch.textContent = s.branch || '';
-  // merge-to-base only makes sense for a worktree-isolated session (has its own branch + root)
-  diffMerge.hidden = !(s.gitRoot && s.branch);
-  diffMerge.disabled = false;
+  // merge-to-base / PR only make sense for a worktree-isolated session (own branch + root)
+  diffMerge.hidden = diffPr.hidden = !(s.gitRoot && s.branch);
+  diffMerge.disabled = diffPr.disabled = false;
   diffOverlay.hidden = false;
   await renderDiff(s);
 }
@@ -804,6 +805,18 @@ diffMerge.addEventListener('click', async () => {
   }
   diffMeta.textContent = `✓ merged ${res.ahead} commit(s): ${res.branch} → ${res.target}`;
   refreshReposGit(); // base branch advanced → refresh sidebar git stats
+});
+diffPr.addEventListener('click', async () => {
+  const s = sessions.get(diffSessionId);
+  if (!s || !s.gitRoot || !s.branch) return;
+  if (!confirm(`「${s.branch}」を origin に push して PR を作成します。よろしいですか？`)) return;
+  diffPr.disabled = diffMerge.disabled = true;
+  diffMeta.textContent = `creating PR for ${s.branch} …`;
+  const res = await window.deck.gitPr({ root: s.gitRoot, branch: s.branch, worktree: s.worktreePath });
+  diffPr.disabled = diffMerge.disabled = false;
+  if (!res || !res.ok) { diffMeta.textContent = '⚠ ' + (res ? res.error : 'PR 作成に失敗しました'); return; }
+  diffMeta.textContent = res.url ? `✓ PR 作成: ${res.url}` : '✓ PR を作成しました';
+  if (res.url) window.deck.openExternal(res.url); // open the PR in the browser
 });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !diffOverlay.hidden) closeDiff(); });
 

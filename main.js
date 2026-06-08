@@ -232,6 +232,45 @@ ipcMain.handle('git:merge', async (_e, { root, branch, worktree }) => {
   }
 });
 
+// Push a worktree-isolated session's branch and open a PR against the base branch
+// via the GitHub CLI (`gh pr create`). Requires an `origin` remote + an authenticated gh.
+ipcMain.handle('git:pr', async (_e, { root, branch, worktree }) => {
+  try {
+    if (!root || !branch) return { ok: false, error: 'PR には worktree セッション（ブランチ）が必要です。' };
+    const target = await currentBranch(root);
+    if (!target || target === 'HEAD') return { ok: false, error: 'ベースが detached HEAD のため PR の base を特定できません。' };
+    if (target === branch) return { ok: false, error: `ベースと同じブランチ (${branch}) では PR を作成できません。` };
+    if (!(await safeGit(['remote', 'get-url', 'origin'], root)).trim()) {
+      return { ok: false, error: 'リモート（origin）が設定されていません。' };
+    }
+    const ahead = parseInt((await git(['rev-list', '--count', `${target}..${branch}`], root)).trim(), 10) || 0;
+    if (ahead === 0) {
+      const dirty = worktree ? (await safeGit(['status', '--porcelain'], worktree)).trim() : '';
+      return dirty
+        ? { ok: false, error: 'worktree に未コミットの変更があります。commit してから PR を作成してください。' }
+        : { ok: false, error: '取り込む新しいコミットがありません。' };
+    }
+    try {
+      // push from root: worktrees share one object store, so the session branch ref resolves here
+      await git(['push', '-u', 'origin', branch], root);
+    } catch (err) {
+      return { ok: false, error: 'push 失敗: ' + String((err && (err.stderr || err.message)) || err).trim() };
+    }
+    let out;
+    try {
+      out = await pexec('gh', ['pr', 'create', '--base', target, '--head', branch, '--fill'],
+        { cwd: root, maxBuffer: 1024 * 1024, timeout: 30000 });
+    } catch (err) {
+      if (err && err.code === 'ENOENT') return { ok: false, error: 'gh CLI が見つかりません。GitHub CLI をインストール／認証してください。' };
+      return { ok: false, error: 'gh pr create 失敗: ' + String((err && (err.stderr || err.message)) || err).trim() };
+    }
+    const url = ((out && out.stdout) || '').split('\n').map((l) => l.trim()).filter((l) => /^https?:\/\//.test(l)).pop() || '';
+    return { ok: true, url, branch, target, ahead };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+});
+
 ipcMain.handle('git:isRepo', async (_e, { dir }) => ({ repo: await isRepo(dir) }));
 
 // ---- IPC: repository registry ----------------------------------------------

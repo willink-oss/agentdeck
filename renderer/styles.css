@@ -557,6 +557,10 @@ select { appearance: none; cursor: pointer; }
 #diff-merge:hover:not(:disabled) { background: rgba(240,136,62,0.12); border-color: var(--accent); color: var(--accent-soft); }
 #diff-merge:disabled { opacity: 0.5; cursor: default; }
 #diff-merge[hidden] { display: none; }
+#diff-pr { color: #61afef; border-color: rgba(97,175,239,0.4); }
+#diff-pr:hover:not(:disabled) { background: rgba(97,175,239,0.12); border-color: #61afef; }
+#diff-pr:disabled { opacity: 0.5; cursor: default; }
+#diff-pr[hidden] { display: none; }
 
 .diff-meta {
   padding: 10px 16px; font-size: 11px; color: var(--text-dim);

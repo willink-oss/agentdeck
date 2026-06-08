@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('deck', {
   onExit: (cb) => ipcRenderer.on('pty:exit', (_e, p) => cb(p)),
   gitDiff: (cwd, baseRef) => ipcRenderer.invoke('git:diff', { cwd, baseRef }),
   gitMerge: (opts) => ipcRenderer.invoke('git:merge', opts),
+  gitPr: (opts) => ipcRenderer.invoke('git:pr', opts),
   isRepo: (dir) => ipcRenderer.invoke('git:isRepo', { dir }),
   openDir: () => ipcRenderer.invoke('dialog:openDir'),
   appInfo: () => ipcRenderer.invoke('app:info'),
