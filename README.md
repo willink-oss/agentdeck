@@ -60,13 +60,16 @@ CI（GitHub Actions）は ubuntu / macOS / windows のマトリクスで `node -
 ## ビルド・配布（macOS / arm64）
 
 `electron-builder` で **.dmg** を生成します（node-pty は asar 外に展開して同梱）。
+**現在のリリースは未署名**で、GitHub Releases を正本に配布します。
 
 ```bash
-npm run pack:unsigned   # 未署名 .dmg（動作確認用・即配布も可）
-npm run dist            # 署名＋公証 .dmg（Developer ID 証明書＋公証用 env が必要）
+npm run pack:unsigned   # 未署名 .dmg ← 現在のリリース手順
 ```
 
-署名・公証・GitHub Releases 公開・アプリ内アップデートチェックの詳細は **[RELEASE.md](RELEASE.md)** を参照。
+> Apple Developer ID による署名＋公証（`npm run dist`）は**現状は予定していません**。
+> 将来署名する場合の手順（証明書・公証用 env）と、GitHub Releases 公開・アプリ内
+> アップデートチェックの詳細は **[RELEASE.md](RELEASE.md)** を参照してください。
+
 アプリは起動時と 6 時間ごとに Releases feed を確認し、新版があれば右下にダウンロード通知を出します（自動更新はしません）。
 
 ## 使い方
