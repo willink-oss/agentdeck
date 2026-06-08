@@ -16,6 +16,7 @@
 5. **入力待ち検知 + 通知** — 出力が既定6秒止まると「要対応」点灯／非アクティブ時はOS通知
 6. **マルチリポジトリ管理** — サイドバーにリポを登録し、リポ単位で branch / diff-stat / worktree を表示。選択リポのセッションだけにステージを絞る**フォーカスフィルタ**、ダブルクリック即起動、PC全体で起動できる **⌂Home 常設エントリ**
 7. **diff からのローカルマージ** — worktree 隔離セッションの成果を、diff ドロワーの「merge ↩ base」でベースブランチへ `git merge --no-ff` で取り込み（リモート/PR 不要）
+8. **ステージ操作** — グリッドの列数切替（auto/1/2/3・永続化）、ペインのドラッグ並べ替え、起動中デッキの保存＆**再起動後に「↻ 前回のデッキを復元」**で再 spawn
 
 ---
 
@@ -107,17 +108,21 @@ agentdeck/
 │   ├── diff.js          #   classifyLine / diffToSegments
 │   ├── attention.js     #   shouldFlagAttention
 │   ├── repos.js         #   normalizePath / addRepo / findRepo / effectiveRepos / findEff
-│   └── gitstat.js       #   parseNumstat / parseWorktreeList / formatStat
+│   ├── gitstat.js       #   parseNumstat / parseWorktreeList / formatStat
+│   ├── layout.js        #   normalizeLayoutMode / gridTemplateFor（グリッド列数）
+│   └── workspace.js     #   toConfig / normalize（デッキ保存/復元）
 ├── renderer/            # サイドバー（マルチリポ）＋ターミナルグリッド＋diff ドロワー
 │   ├── index.html
 │   ├── renderer.js
 │   └── styles.css
-└── test/                # node --test 用ユニットテスト（52 cases）
+└── test/                # node --test 用ユニットテスト（63 cases）
     ├── git-utils.test.js
     ├── diff.test.js
     ├── attention.test.js
     ├── gitstat.test.js
-    └── repos.test.js
+    ├── repos.test.js
+    ├── layout.test.js
+    └── workspace.test.js
 ```
 
 ## 既知の割り切り
@@ -126,9 +131,9 @@ agentdeck/
 - diff は `git diff <base>`（追跡ファイル）＋ untracked 一覧。
 - 入力待ち検知はヒューリスティック（出力停止＝待ち）。ビルド完了等でも点灯し得る。
 - merge はローカル `git merge --no-ff` のみ（**コミット済み履歴**が対象。未コミット分はセッション内で commit してから）。コンフリクト時は `git merge --abort` で原状復帰。
+- デッキ復元は各セッションの**起動設定を再 spawn** するもの（ライブ端末出力・スクロールバックは復元しない）。worktree セッションは既存の worktree ディレクトリでシェルを開き直す。
 
 ## 次の一手（任意）
 
 - diff からの **PR 作成**（ローカル `git merge` 導線は実装済み）
-- レイアウト切替・ペイン並べ替え、セッション構成の保存/復元
 - 配布を絞るなら Tauri + `portable-pty`（Rust）へ移植
