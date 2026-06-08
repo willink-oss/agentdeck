@@ -14,6 +14,8 @@
 3. **Git worktree 隔離** — セッションごとに新規ブランチ＋作業ツリーで起動し競合防止
 4. **内蔵 diff レビュー** — 各ペインの `diff` で起動時点からの変更を色分け表示
 5. **入力待ち検知 + 通知** — 出力が既定6秒止まると「要対応」点灯／非アクティブ時はOS通知
+6. **マルチリポジトリ管理** — サイドバーにリポを登録し、リポ単位で branch / diff-stat / worktree を表示。選択リポのセッションだけにステージを絞る**フォーカスフィルタ**、ダブルクリック即起動、PC全体で起動できる **⌂Home 常設エントリ**
+7. **diff からのローカルマージ** — worktree 隔離セッションの成果を、diff ドロワーの「merge ↩ base」でベースブランチへ `git merge --no-ff` で取り込み（リモート/PR 不要）
 
 ---
 
@@ -98,20 +100,24 @@ git push -u origin main
 
 ```
 agentdeck/
-├── main.js              # Electron main：PTY・git worktree/diff・IPC
+├── main.js              # Electron main：PTY・git worktree/diff/merge・リポ登録・IPC
 ├── preload.js           # contextBridge 経由の IPC
 ├── lib/                 # DOM/Electron 非依存の純粋ロジック（テスト対象）
 │   ├── git-utils.js     #   defaultShell / sanitizeBranch / worktreeFolderName
 │   ├── diff.js          #   classifyLine / diffToSegments
-│   └── attention.js     #   shouldFlagAttention
-├── renderer/
+│   ├── attention.js     #   shouldFlagAttention
+│   ├── repos.js         #   normalizePath / addRepo / findRepo / effectiveRepos / findEff
+│   └── gitstat.js       #   parseNumstat / parseWorktreeList / formatStat
+├── renderer/            # サイドバー（マルチリポ）＋ターミナルグリッド＋diff ドロワー
 │   ├── index.html
 │   ├── renderer.js
 │   └── styles.css
-└── test/                # node --test 用ユニットテスト（24 cases）
+└── test/                # node --test 用ユニットテスト（52 cases）
     ├── git-utils.test.js
     ├── diff.test.js
-    └── attention.test.js
+    ├── attention.test.js
+    ├── gitstat.test.js
+    └── repos.test.js
 ```
 
 ## 既知の割り切り
@@ -119,9 +125,10 @@ agentdeck/
 - `kill` では worktree とブランチを**残す**（作業保全優先。不要分は `git worktree prune`）。
 - diff は `git diff <base>`（追跡ファイル）＋ untracked 一覧。
 - 入力待ち検知はヒューリスティック（出力停止＝待ち）。ビルド完了等でも点灯し得る。
+- merge はローカル `git merge --no-ff` のみ（**コミット済み履歴**が対象。未コミット分はセッション内で commit してから）。コンフリクト時は `git merge --abort` で原状復帰。
 
 ## 次の一手（任意）
 
-- diff からのマージ導線（`git merge` / PR 作成）
+- diff からの **PR 作成**（ローカル `git merge` 導線は実装済み）
 - レイアウト切替・ペイン並べ替え、セッション構成の保存/復元
 - 配布を絞るなら Tauri + `portable-pty`（Rust）へ移植
