@@ -308,6 +308,13 @@ select { appearance: none; cursor: pointer; }
 .empty-mark { font-size: 30px; color: var(--line); letter-spacing: 0.2em; }
 .empty h2 { margin: 16px 0 8px; font-size: 16px; letter-spacing: 0.04em; }
 .empty p { margin: 0; color: var(--text-faint); font-size: 12px; line-height: 1.7; }
+.restore-deck {
+  margin-top: 22px; padding: 8px 18px; border-radius: 7px;
+  background: var(--bg-elev); border: 1px solid var(--accent); color: var(--accent-soft);
+  cursor: pointer; font-family: var(--mono); font-size: 12px; transition: all 0.12s;
+}
+.restore-deck:hover { background: rgba(240,136,62,0.12); }
+.restore-deck[hidden] { display: none; }
 
 #grid {
   flex: 1;

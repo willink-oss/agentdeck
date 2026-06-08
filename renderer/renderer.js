@@ -45,6 +45,7 @@ const stageFilterEl = $('#stage-filter');
 const stageFilterLabel = $('#stage-filter-label');
 const stageAllBtn = $('#stage-all');
 const layoutSwitchEl = $('#layout-switch');
+const restoreBtnEl = $('#restore-deck');
 const emptyTitleEl = $('#empty h2');
 const emptyDescEl = $('#empty p');
 const EMPTY_DEFAULT_TITLE = emptyTitleEl ? emptyTitleEl.textContent : 'No agents running';
@@ -132,6 +133,7 @@ $('#launch-form').addEventListener('submit', (e) => { e.preventDefault(); launch
 const Repos = window.Repos;
 const GitStat = window.GitStat;
 const Layout = window.Layout;
+const Workspace = window.Workspace;
 function normRepoPath(p) { return Repos.normalizePath(p); }
 /** Persisted repos plus the pinned synthetic Home entry (Home first, deduped).
  *  Pure list logic lives in lib/repos.js (CI-covered); these just bind state. */
@@ -240,6 +242,7 @@ function updateStage() {
   if (total === 0) { setEmptyState(null); emptyState.style.display = 'flex'; }
   else if (visible === 0) { setEmptyState(r ? r.name : null); emptyState.style.display = 'flex'; }
   else { emptyState.style.display = 'none'; }
+  refreshRestoreButton();
 }
 function clearRepoSelection() {
   activeRepoId = null;
@@ -473,7 +476,43 @@ grid.addEventListener('drop', (e) => {
   const box = targetPane.getBoundingClientRect();
   const before = (e.clientX - box.left) < box.width / 2; // left half = drop before, else after
   grid.insertBefore(dragged.el, before ? targetPane : targetPane.nextSibling);
+  saveWorkspace();
 });
+
+// ---- workspace: persist the live deck + re-spawn it on a later start --------
+/** Snapshot the current deck (every pane in on-screen order) as launch configs.
+ *  Intentionally captures exited panes too: restore rebuilds the prior layout by
+ *  re-running each session's command, so an exited-but-kept pane comes back. */
+function buildWorkspace() {
+  const cfgs = [];
+  for (const pane of grid.querySelectorAll('.pane')) {
+    const s = sessions.get(pane.dataset.id);
+    if (s) cfgs.push(Workspace.toConfig(s));
+  }
+  return cfgs;
+}
+function saveWorkspace() {
+  try { localStorage.setItem(Workspace.KEY, JSON.stringify(buildWorkspace())); } catch (_) {}
+}
+function loadWorkspace() {
+  try { return Workspace.normalize(JSON.parse(localStorage.getItem(Workspace.KEY) || '[]')); }
+  catch (_) { return []; }
+}
+/** Show the empty-state restore button only when nothing is running and a deck was saved. */
+function refreshRestoreButton() {
+  const n = sessions.size === 0 ? loadWorkspace().length : 0;
+  if (n > 0) { restoreBtnEl.textContent = `↻ 前回のデッキを復元 (${n})`; restoreBtnEl.hidden = false; }
+  else { restoreBtnEl.hidden = true; }
+}
+async function restoreWorkspace() {
+  const cfgs = loadWorkspace();
+  restoreBtnEl.hidden = true;
+  // worktree:false — the saved cwd is already the (existing) worktree dir, so just reopen a shell there
+  for (const c of cfgs) {
+    await launch({ presetKey: c.presetKey, command: c.command, name: c.name, cwd: c.cwd, worktree: false, branch: '' });
+  }
+}
+restoreBtnEl.addEventListener('click', restoreWorkspace);
 
 setInterval(refreshReposGit, 7000);
 window.addEventListener('focus', refreshReposGit);
@@ -540,6 +579,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
     alive: true, hasOutput: false, attention: false, lastData: Date.now(),
     gitCwd: null, baseSha: null, branch: null, gitRoot: null, worktreePath: null,
     repoId: repoIdForCwd(workdir), launchCwd: workdir,
+    presetKey, command,            // remembered so the deck can be saved + re-spawned
   };
   sessions.set(id, s);
   updateCount();
@@ -584,6 +624,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   }
   term.focus();
   activeSessionId = id;
+  saveWorkspace(); // remember this session (cwd/git info now resolved) for restore
 }
 
 function killSession(id) {
@@ -597,6 +638,7 @@ function killSession(id) {
   if (diffSessionId === id) closeDiff();
   updateCount();
   updateWaitingTitle();
+  saveWorkspace(); // persist the post-kill deck before the empty-state restore button refreshes
   renderRepos(); // -> updateStage() restores empty state / clears filter pill as needed
 }
 
