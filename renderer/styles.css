@@ -485,6 +485,33 @@ select { appearance: none; cursor: pointer; }
 .pane-diff:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ---------- diff overlay ---------- */
+/* ---------- command palette (⌘K) ---------- */
+.palette { position: fixed; inset: 0; z-index: 60; }
+.palette[hidden] { display: none; }
+.palette-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
+.palette-panel {
+  position: absolute; top: 13vh; left: 50%; transform: translateX(-50%);
+  width: min(560px, 92vw);
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: paletteIn 0.14s ease-out;
+}
+@keyframes paletteIn { from { transform: translate(-50%, -8px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+#palette-input {
+  border: none; outline: none; background: transparent; font-family: var(--mono);
+  padding: 14px 16px; font-size: 14px; color: var(--text);
+  border-bottom: 1px solid var(--line);
+}
+.palette-list { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
+.palette-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; min-width: 0; }
+.palette-row.sel { background: var(--bg-panel-2); }
+.palette-row.sel .palette-name { color: var(--accent-soft); }
+.palette-name { font-size: 13px; color: var(--text); flex: none; }
+.palette-ctx { font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.palette-empty { padding: 14px 12px; font-size: 12px; color: var(--text-faint); text-align: center; }
+.palette-foot { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 10px; color: var(--text-faint); }
+
 .diff-overlay { position: fixed; inset: 0; z-index: 50; }
 .diff-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
 .diff-panel {

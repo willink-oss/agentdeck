@@ -46,6 +46,9 @@ const stageFilterLabel = $('#stage-filter-label');
 const stageAllBtn = $('#stage-all');
 const layoutSwitchEl = $('#layout-switch');
 const restoreBtnEl = $('#restore-deck');
+const paletteEl = $('#palette');
+const paletteInput = $('#palette-input');
+const paletteList = $('#palette-list');
 const emptyTitleEl = $('#empty h2');
 const emptyDescEl = $('#empty p');
 const EMPTY_DEFAULT_TITLE = emptyTitleEl ? emptyTitleEl.textContent : 'No agents running';
@@ -134,6 +137,7 @@ const Repos = window.Repos;
 const GitStat = window.GitStat;
 const Layout = window.Layout;
 const Workspace = window.Workspace;
+const Fuzzy = window.Fuzzy;
 function normRepoPath(p) { return Repos.normalizePath(p); }
 /** Persisted repos plus the pinned synthetic Home entry (Home first, deduped).
  *  Pure list logic lives in lib/repos.js (CI-covered); these just bind state. */
@@ -818,7 +822,9 @@ window.addEventListener('keydown', (e) => {
   // hijacking them would break the shell. Windows/Linux builds will need a different binding.
   if (!e.metaKey || e.ctrlKey || e.altKey) return;
   if (document.activeElement && document.activeElement.isContentEditable) return; // editing a name
-  if (e.key >= '1' && e.key <= '9') {
+  if (!paletteEl.hidden) return; // the open palette handles its own keys
+  if (e.key === 'k' || e.key === 'K') { e.preventDefault(); openPalette(); }
+  else if (e.key >= '1' && e.key <= '9') {
     const p = visiblePanes()[Number(e.key) - 1];
     if (p) { e.preventDefault(); focusSession(p.dataset.id); }
   } else if (e.key === ']') { e.preventDefault(); cyclePane(1); }
@@ -864,6 +870,92 @@ function startRename(id, nameEl) {
   nameEl.addEventListener('keydown', onKey);
   nameEl.addEventListener('blur', onBlur);
 }
+
+// ---- session command palette (⌘K): fuzzy-find a session and jump to it -----
+let paletteResults = []; // session ids in current display order
+let paletteIndex = 0;
+function paletteContext(s) {
+  const repo = s.repoId ? findEff(s.repoId) : null;
+  const preset = PRESETS[s.presetKey];
+  return [repo ? repo.name : '', s.branch || '', preset ? preset.label : ''].filter(Boolean).join(' · ');
+}
+function rankSessions(query) {
+  const q = query.trim();
+  const out = [];
+  for (const [id, s] of sessions) {
+    const ns = Fuzzy.score(q, s.name);
+    const cs = Fuzzy.score(q, paletteContext(s));
+    // a name hit (+10) outranks a context-only hit; -Infinity means "no match on that field"
+    let sc = Math.max(ns != null ? ns + 10 : -Infinity, cs != null ? cs : -Infinity);
+    if (sc === -Infinity) continue;
+    if (s.attention) sc += 1000;                 // sessions waiting for input float to the top
+    out.push({ id, s, sc });
+  }
+  out.sort((a, b) => (b.sc - a.sc) || (b.s.lastData - a.s.lastData));
+  return out;
+}
+function setPaletteSel(i) {
+  if (i < 0 || i >= paletteResults.length) return;
+  paletteIndex = i;
+  const rows = paletteList.querySelectorAll('.palette-row');
+  rows.forEach((el, idx) => el.classList.toggle('sel', idx === i));
+  if (rows[i]) rows[i].scrollIntoView({ block: 'nearest' });
+}
+function movePalette(delta) {
+  if (paletteResults.length) setPaletteSel((paletteIndex + delta + paletteResults.length) % paletteResults.length);
+}
+function renderPalette(query) {
+  const ranked = rankSessions(query);
+  paletteResults = ranked.map((r) => r.id);
+  paletteIndex = 0;
+  paletteList.innerHTML = '';
+  if (!ranked.length) {
+    const li = document.createElement('li');
+    li.className = 'palette-empty';
+    li.textContent = sessions.size ? '該当なし' : '起動中のセッションがありません';
+    paletteList.appendChild(li);
+    return;
+  }
+  ranked.forEach((r, i) => {
+    const li = document.createElement('li');
+    li.className = 'palette-row' + (i === 0 ? ' sel' : '');
+    const dot = document.createElement('span');
+    dot.className = 'status-dot' + (r.s.alive ? (r.s.attention ? ' waiting' : ' live') : '');
+    const nm = document.createElement('span');
+    nm.className = 'palette-name'; nm.textContent = r.s.name;
+    const ctx = document.createElement('span');
+    ctx.className = 'palette-ctx'; ctx.textContent = paletteContext(r.s);
+    li.append(dot, nm, ctx);
+    li.addEventListener('mousedown', (e) => { e.preventDefault(); paletteIndex = i; commitPalette(); });
+    li.addEventListener('mousemove', () => setPaletteSel(i));
+    paletteList.appendChild(li);
+  });
+}
+function commitPalette() {
+  const id = paletteResults[paletteIndex];
+  closePalette();
+  if (!id) return;
+  const s = sessions.get(id);
+  if (s && s.el.style.display === 'none') clearRepoSelection(); // reveal a filter-hidden pane
+  focusSession(id);
+}
+function openPalette() {
+  if (!sessions.size) return;
+  paletteEl.hidden = false;
+  paletteInput.value = '';
+  renderPalette('');
+  paletteInput.focus();
+}
+function closePalette() { paletteEl.hidden = true; }
+paletteInput.addEventListener('input', () => renderPalette(paletteInput.value));
+paletteInput.addEventListener('keydown', (e) => {
+  e.stopPropagation(); // keep keys away from the global ⌘ shortcut handler
+  if (e.key === 'ArrowDown') { e.preventDefault(); movePalette(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); movePalette(-1); }
+  else if (e.key === 'Enter') { e.preventDefault(); commitPalette(); }
+  else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+});
+$('#palette-backdrop').addEventListener('click', closePalette);
 
 // ---- boot ------------------------------------------------------------------
 (async function boot() {

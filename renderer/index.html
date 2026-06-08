@@ -72,7 +72,7 @@
         </div>
 
         <button type="submit" id="launch">&#9654; Launch agent</button>
-        <div class="kbd-hint">&#8984;1&ndash;9 ペイン &middot; &#8984;[ &#8984;] 移動 &middot; &#8984;&crarr; 起動 &middot; &#8984;W 終了</div>
+        <div class="kbd-hint">&#8984;K 検索 &middot; &#8984;1&ndash;9 ペイン &middot; &#8984;[ &#8984;] 移動 &middot; &#8984;&crarr; 起動 &middot; &#8984;W 終了</div>
       </form>
 
       <div class="quick">
@@ -137,6 +137,16 @@
     </div>
   </div>
 
+  <div id="palette" class="palette" hidden>
+    <div class="palette-backdrop" id="palette-backdrop"></div>
+    <div class="palette-panel">
+      <input id="palette-input" type="text" spellcheck="false" autocomplete="off"
+             placeholder="セッションを検索…（名前 / リポ / ブランチ / preset）" />
+      <ul id="palette-list" class="palette-list"></ul>
+      <div class="palette-foot">↑↓ 選択 · ↵ 移動 · Esc 閉じる</div>
+    </div>
+  </div>
+
   <div id="update-toast" class="update-toast" hidden>
     <span class="ut-mark">↑</span>
     <span id="update-toast-text"></span>
@@ -152,6 +162,7 @@
   <script src="../lib/gitstat.js"></script>
   <script src="../lib/layout.js"></script>
   <script src="../lib/workspace.js"></script>
+  <script src="../lib/fuzzy.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
