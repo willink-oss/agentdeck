@@ -11,12 +11,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/willink-labs/agentdeck.git"
+    "url": "git+https://github.com/willink-oss/agentdeck.git"
   },
   "bugs": {
-    "url": "https://github.com/willink-labs/agentdeck/issues"
+    "url": "https://github.com/willink-oss/agentdeck/issues"
   },
-  "homepage": "https://github.com/willink-labs/agentdeck#readme",
+  "homepage": "https://github.com/willink-oss/agentdeck#readme",
   "scripts": {
     "start": "electron .",
     "rebuild": "electron-rebuild -f -w node-pty",

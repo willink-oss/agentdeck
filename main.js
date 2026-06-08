@@ -264,9 +264,9 @@ ipcMain.handle('app:info', () => ({
 }));
 
 // ---- update check (manual distribution: we only check the feed + notify) ----
-const RELEASES_PAGE = 'https://github.com/willink-labs/agentdeck/releases';
+const RELEASES_PAGE = 'https://github.com/willink-oss/agentdeck/releases';
 const UPDATE_FEED = process.env.AGENTDECK_UPDATE_FEED
-  || 'https://api.github.com/repos/willink-labs/agentdeck/releases/latest';
+  || 'https://api.github.com/repos/willink-oss/agentdeck/releases/latest';
 const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000; // re-check every 6h while running
 
 function fetchJson(url, redirects) {

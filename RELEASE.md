@@ -50,7 +50,7 @@ npm run pack:unsigned   # → 未署名 .dmg。node-pty でシェルが起動す
 
 ## 2. GitHub Releases へ公開（更新チェックの feed になる）
 
-アプリ内更新チェックは `https://api.github.com/repos/willink-labs/agentdeck/releases/latest` の
+アプリ内更新チェックは `https://api.github.com/repos/willink-oss/agentdeck/releases/latest` の
 `tag_name` を見る。**バージョンは `package.json > version` と Git タグを一致させる。**
 
 ```bash

@@ -12,7 +12,7 @@ Agent Deck はベータ（0.x）です。**最新リリースのみ**サポー�
 ## 脆弱性の報告 / Reporting a Vulnerability
 
 脆弱性を見つけた場合は **公開 issue を作らないでください**。
-GitHub の [Private vulnerability reporting](https://github.com/willink-labs/agentdeck/security/advisories/new)
+GitHub の [Private vulnerability reporting](https://github.com/willink-oss/agentdeck/security/advisories/new)
 からご報告ください（リポジトリ設定 → Security → *Private vulnerability reporting* を有効化）。
 利用できない場合は `yutaro_shirai@i-willink.com` 宛にメールでも受け付けます。
 

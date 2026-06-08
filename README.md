@@ -1,7 +1,8 @@
 # Agent Deck
 
-[![CI](https://github.com/willink-labs/agentdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/willink-labs/agentdeck/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/willink-oss/agentdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/willink-oss/agentdeck/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Release](https://img.shields.io/github/v/release/willink-oss/agentdeck?include_prereleases&sort=semver)](https://github.com/willink-oss/agentdeck/releases)
 
 複数のAI CLIエージェント（Claude Code / Antigravity / Codex / Gemini など）を、
 それぞれ独立したターミナルで**並列に**立ち上げて監視するデスクトップアプリです。
@@ -23,7 +24,19 @@
 
 ---
 
-## セットアップ
+## ダウンロード（macOS）
+
+最新版は [Releases](https://github.com/willink-oss/agentdeck/releases) から `.dmg` を取得してください（Apple Silicon / arm64）。
+
+> ⚠️ **現在は未署名のベータ配布**です。初回起動時に Gatekeeper の警告（「開発元を確認できません」）が出ます。
+> **右クリック → 開く**、または **システム設定 → プライバシーとセキュリティ → このまま開く** で起動してください。
+> 署名・公証済みビルドは Apple Developer ID 証明書の準備後に差し替え予定です。
+
+アプリは GitHub Releases を参照して起動時にアップデートの有無を通知します（自動更新はしません）。
+
+---
+
+## セットアップ（開発）
 
 ```bash
 npm install
@@ -72,31 +85,9 @@ Windows `C:\Users\<Username>\AppData\Local\agy\bin`。
 
 ---
 
-## GitHub 組織での管理
+## リポジトリ構成
 
-リポジトリ URL は `willink-labs/agentdeck` を想定しています（`package.json` の
-`repository` を組織名に合わせて調整してください）。
-
-### GitHub CLI で一発作成（推奨）
-
-```bash
-git init -b main
-git add .
-git commit -m "chore: initial commit (Agent Deck prototype)"
-
-# 組織にプライベートで作成 & push
-gh repo create willink-labs/agentdeck --private --source=. --remote=origin --push
-```
-
-### 既存の空リポジトリへ push する場合
-
-```bash
-git init -b main
-git add .
-git commit -m "chore: initial commit (Agent Deck prototype)"
-git remote add origin git@github.com:willink-labs/agentdeck.git
-git push -u origin main
-```
+[`willink-oss/agentdeck`](https://github.com/willink-oss/agentdeck)（i-Willink の OSS 組織）で公開しています。
 
 ### 同梱物
 
