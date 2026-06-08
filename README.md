@@ -28,9 +28,9 @@
 
 最新版は [Releases](https://github.com/willink-oss/agentdeck/releases) から `.dmg` を取得してください（Apple Silicon / arm64）。
 
-> ⚠️ **現在は未署名のベータ配布**です。初回起動時に Gatekeeper の警告（「開発元を確認できません」）が出ます。
+> ⚠️ **未署名の OSS 配布**です（GitHub Releases が正本）。初回起動時に Gatekeeper の警告（「開発元を確認できません」）が出ます。
 > **右クリック → 開く**、または **システム設定 → プライバシーとセキュリティ → このまま開く** で起動してください。
-> 署名・公証済みビルドは Apple Developer ID 証明書の準備後に差し替え予定です。
+> Apple Developer ID 署名・公証および App Store 配布は予定していません（App Store はサンドボックスとシェル起動が非互換のため非対応）。
 
 アプリは GitHub Releases を参照して起動時にアップデートの有無を通知します（自動更新はしません）。
 
