@@ -263,15 +263,20 @@ select { appearance: none; cursor: pointer; }
 }
 
 /* ---------- Stage ---------- */
-#stage { position: relative; overflow: hidden; background: var(--bg); }
+#stage { position: relative; overflow: hidden; background: var(--bg); display: flex; flex-direction: column; }
 
-/* repo focus-filter pill (floats over the grid) */
+/* stage toolbar — reserves a top strip for stage controls so they never cover pane buttons */
+.stage-toolbar {
+  flex: none; position: relative; z-index: 5;
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  min-height: 34px; padding: 5px 10px;
+  background: var(--bg); border-bottom: 1px solid var(--line-soft);
+}
+/* repo focus-filter pill (sits at the left of the toolbar) */
 .stage-filter {
-  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-  z-index: 30; display: flex; align-items: center; gap: 10px;
+  margin-right: auto; display: flex; align-items: center; gap: 10px;
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 999px;
   padding: 4px 5px 4px 13px; font-size: 11px; color: var(--text-dim);
-  box-shadow: 0 6px 22px rgba(0,0,0,0.45);
 }
 .stage-filter[hidden] { display: none; } /* class display:flex would otherwise beat [hidden] */
 .sf-all {
@@ -281,12 +286,10 @@ select { appearance: none; cursor: pointer; }
 }
 .sf-all:hover { color: var(--text); border-color: var(--accent); }
 
-/* grid layout (column-count) switcher — floats over the grid, top-right */
+/* grid layout (column-count) switcher — right side of the stage toolbar */
 .layout-switch {
-  position: absolute; top: 8px; right: 10px; z-index: 30;
   display: flex; gap: 2px; padding: 2px;
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 7px;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
 }
 .ls-btn {
   background: transparent; border: none; border-radius: 5px;
@@ -307,7 +310,8 @@ select { appearance: none; cursor: pointer; }
 .empty p { margin: 0; color: var(--text-faint); font-size: 12px; line-height: 1.7; }
 
 #grid {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
   grid-auto-rows: minmax(260px, 1fr);
@@ -332,6 +336,13 @@ select { appearance: none; cursor: pointer; }
   background: var(--bg-panel-2);
   border-bottom: 1px solid var(--line);
 }
+.pane-grip {
+  flex: none; cursor: grab; user-select: none;
+  color: var(--text-faint); font-size: 12px; line-height: 1; letter-spacing: -1px;
+}
+.pane-grip:hover { color: var(--text-dim); }
+.pane-grip:active { cursor: grabbing; }
+.pane.dragging { opacity: 0.45; }
 .status-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--text-faint);

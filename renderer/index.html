@@ -92,9 +92,17 @@
     </aside>
 
     <main id="stage">
-      <div id="stage-filter" class="stage-filter" hidden>
-        <span id="stage-filter-label"></span>
-        <button type="button" id="stage-all" class="sf-all">すべて表示</button>
+      <div id="stage-toolbar" class="stage-toolbar">
+        <div id="stage-filter" class="stage-filter" hidden>
+          <span id="stage-filter-label"></span>
+          <button type="button" id="stage-all" class="sf-all">すべて表示</button>
+        </div>
+        <div id="layout-switch" class="layout-switch" title="グリッドの列数">
+          <button type="button" class="ls-btn active" data-cols="auto">auto</button>
+          <button type="button" class="ls-btn" data-cols="1">1</button>
+          <button type="button" class="ls-btn" data-cols="2">2</button>
+          <button type="button" class="ls-btn" data-cols="3">3</button>
+        </div>
       </div>
       <div id="empty" class="empty">
         <div class="empty-inner">
@@ -103,12 +111,6 @@
           <p>左のパネルからエージェントを起動すると、ここにターミナルが並びます。<br />
              複数立ち上げれば並列で監視できます。</p>
         </div>
-      </div>
-      <div id="layout-switch" class="layout-switch" title="グリッドの列数">
-        <button type="button" class="ls-btn active" data-cols="auto">auto</button>
-        <button type="button" class="ls-btn" data-cols="1">1</button>
-        <button type="button" class="ls-btn" data-cols="2">2</button>
-        <button type="button" class="ls-btn" data-cols="3">3</button>
       </div>
       <div id="grid"></div>
     </main>

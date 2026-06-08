@@ -457,6 +457,24 @@ layoutSwitchEl.addEventListener('click', (e) => {
 });
 applyLayout((() => { try { return localStorage.getItem(LAYOUT_KEY); } catch (_) { return null; } })(), false);
 
+// ---- pane drag-to-reorder (HTML5 DnD; drag a pane header onto another) ------
+let dragPaneId = null;
+grid.addEventListener('dragover', (e) => {
+  if (dragPaneId == null) return;
+  e.preventDefault();
+  try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+});
+grid.addEventListener('drop', (e) => {
+  if (dragPaneId == null) return;
+  e.preventDefault();
+  const dragged = sessions.get(dragPaneId);
+  const targetPane = e.target.closest ? e.target.closest('.pane') : null;
+  if (!dragged || !targetPane || targetPane === dragged.el) return;
+  const box = targetPane.getBoundingClientRect();
+  const before = (e.clientX - box.left) < box.width / 2; // left half = drop before, else after
+  grid.insertBefore(dragged.el, before ? targetPane : targetPane.nextSibling);
+});
+
 setInterval(refreshReposGit, 7000);
 window.addEventListener('focus', refreshReposGit);
 
@@ -477,6 +495,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   const head = document.createElement('div');
   head.className = 'pane-head';
   head.innerHTML =
+    '<span class="pane-grip" title="ドラッグで並べ替え">⠿</span>' +
     '<span class="status-dot live"></span>' +
     '<span class="pane-name"></span>' +
     `<span class="pane-badge">${preset.badge}</span>` +
@@ -485,6 +504,14 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
     '<button class="pane-kill" title="Kill session">kill</button>';
   head.querySelector('.pane-name').textContent = displayName;
   head.querySelector('.pane-cwd').textContent = workdir || '~';
+  // drag the grip handle (not the whole header) to reorder panes — keeps diff/kill clickable
+  const grip = head.querySelector('.pane-grip');
+  grip.draggable = true;
+  grip.addEventListener('dragstart', (e) => {
+    dragPaneId = id; pane.classList.add('dragging');
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) {}
+  });
+  grip.addEventListener('dragend', () => { dragPaneId = null; pane.classList.remove('dragging'); });
 
   const termHost = document.createElement('div');
   termHost.className = 'term-host';
