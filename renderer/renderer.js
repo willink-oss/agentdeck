@@ -258,12 +258,19 @@ function selectRepo(id) {
   updateLaunchLabel();
   updateStage();
 }
+/** Set the active session and reflect it as the highlighted (.active) pane. */
+function markActive(id) {
+  activeSessionId = id;
+  for (const el of grid.querySelectorAll('.pane.active')) el.classList.remove('active');
+  const s = sessions.get(id);
+  if (s) s.el.classList.add('active');
+}
 function focusSession(id) {
   const s = sessions.get(id);
   if (!s) return;
   try { s.el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) {}
   try { s.term.focus(); } catch (_) {}
-  activeSessionId = id;
+  markActive(id);
   clearAttention(s);
 }
 
@@ -554,7 +561,10 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
     '<span class="pane-cwd"></span>' +
     '<button class="pane-diff" title="Review git diff">diff</button>' +
     '<button class="pane-kill" title="Kill session">kill</button>';
-  head.querySelector('.pane-name').textContent = displayName;
+  const nameEl = head.querySelector('.pane-name');
+  nameEl.textContent = displayName;
+  nameEl.title = 'ダブルクリックで名前変更';
+  nameEl.addEventListener('dblclick', (e) => { e.stopPropagation(); startRename(id, nameEl); });
   head.querySelector('.pane-cwd').textContent = workdir || '~';
   // drag the grip handle (not the whole header) to reorder panes — keeps diff/kill clickable
   const grip = head.querySelector('.pane-grip');
@@ -598,7 +608,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   updateCount();
   renderRepos();
 
-  const setActive = () => { activeSessionId = id; clearAttention(s); };
+  const setActive = () => { markActive(id); clearAttention(s); };
   pane.addEventListener('mousedown', setActive);
   termHost.addEventListener('focusin', setActive);
 
@@ -636,7 +646,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
     diffBtn.title = 'not a git repository';
   }
   term.focus();
-  activeSessionId = id;
+  markActive(id);
   saveWorkspace(); // remember this session (cwd/git info now resolved) for restore
 }
 
@@ -648,6 +658,7 @@ function killSession(id) {
   try { s.term.dispose(); } catch (_) {}
   s.el.remove();
   sessions.delete(id);
+  if (activeSessionId === id) activeSessionId = null;
   if (diffSessionId === id) closeDiff();
   updateCount();
   updateWaitingTitle();
@@ -790,6 +801,69 @@ diffMerge.addEventListener('click', async () => {
   refreshReposGit(); // base branch advanced → refresh sidebar git stats
 });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !diffOverlay.hidden) closeDiff(); });
+
+// ---- keyboard shortcuts: ⌘/Ctrl + 1-9 focus pane / [ ] cycle / Enter launch / W kill ----
+function visiblePanes() {
+  return [...grid.querySelectorAll('.pane')].filter((p) => p.style.display !== 'none');
+}
+function cyclePane(dir) {
+  const panes = visiblePanes();
+  if (!panes.length) return;
+  let i = panes.findIndex((p) => p.dataset.id === activeSessionId);
+  if (i < 0) i = dir > 0 ? -1 : 0;
+  focusSession(panes[(i + dir + panes.length) % panes.length].dataset.id);
+}
+window.addEventListener('keydown', (e) => {
+  // ⌘ only (macOS): Ctrl-combos (Ctrl+W, Ctrl+[, Ctrl+1 …) are terminal/readline keys —
+  // hijacking them would break the shell. Windows/Linux builds will need a different binding.
+  if (!e.metaKey || e.ctrlKey || e.altKey) return;
+  if (document.activeElement && document.activeElement.isContentEditable) return; // editing a name
+  if (e.key >= '1' && e.key <= '9') {
+    const p = visiblePanes()[Number(e.key) - 1];
+    if (p) { e.preventDefault(); focusSession(p.dataset.id); }
+  } else if (e.key === ']') { e.preventDefault(); cyclePane(1); }
+  else if (e.key === '[') { e.preventDefault(); cyclePane(-1); }
+  // ⌘Enter deliberately works even while a form input is focused (quick launch from anywhere)
+  else if (e.key === 'Enter') { e.preventDefault(); launch(currentLaunchOpts()); }
+  else if (e.key === 'w' || e.key === 'W') {
+    if (activeSessionId && sessions.has(activeSessionId)) { e.preventDefault(); killSession(activeSessionId); }
+  }
+});
+
+// ---- inline session rename (double-click the pane name) --------------------
+function renameSession(id, name) {
+  const s = sessions.get(id);
+  if (!s) return;
+  s.name = name;
+  const nm = s.el.querySelector('.pane-name'); if (nm) nm.textContent = name;
+  const row = repoRowEls.get(id);
+  if (row) { const rn = row.querySelector('.repo-session-name'); if (rn) rn.textContent = name; }
+  saveWorkspace(); // restore should bring the renamed deck back
+}
+function startRename(id, nameEl) {
+  const s = sessions.get(id);
+  if (!s || nameEl.isContentEditable) return; // ignore re-entry while already editing
+  nameEl.contentEditable = 'true';
+  nameEl.spellcheck = false;
+  nameEl.focus();
+  const range = document.createRange(); range.selectNodeContents(nameEl);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  const onKey = (ev) => {
+    ev.stopPropagation(); // keep global shortcuts from firing while typing a name
+    if (ev.key === 'Enter') { ev.preventDefault(); nameEl.blur(); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); nameEl.textContent = s.name; nameEl.blur(); }
+  };
+  const onBlur = () => {
+    nameEl.removeEventListener('keydown', onKey);
+    nameEl.removeEventListener('blur', onBlur);
+    nameEl.contentEditable = 'false';
+    const txt = nameEl.textContent.replace(/\s+/g, ' ').trim();
+    if (txt && txt !== s.name) renameSession(id, txt);
+    else nameEl.textContent = s.name; // revert blank / unchanged
+  };
+  nameEl.addEventListener('keydown', onKey);
+  nameEl.addEventListener('blur', onBlur);
+}
 
 // ---- boot ------------------------------------------------------------------
 (async function boot() {

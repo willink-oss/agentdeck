@@ -185,6 +185,7 @@ html, body {
 }
 .field-label em { color: var(--text-faint); font-style: normal; }
 .field-hint { font-size: 10px; color: var(--text-faint); }
+.kbd-hint { margin-top: 8px; font-size: 10px; color: var(--text-faint); letter-spacing: 0.02em; }
 
 input, select {
   background: var(--bg-panel-2);
@@ -385,6 +386,9 @@ select { appearance: none; cursor: pointer; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
 
 .pane-name { font-size: 12px; font-weight: 600; color: var(--text); }
+.pane-name[contenteditable="true"] {
+  outline: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; cursor: text;
+}
 .pane-badge {
   font-size: 9px;
   letter-spacing: 0.12em;
@@ -459,6 +463,7 @@ select { appearance: none; cursor: pointer; }
   animation: pulse 1.2s ease-in-out infinite;
 }
 .pane.attention { box-shadow: inset 0 0 0 1px var(--accent); }
+.pane.active { box-shadow: inset 0 0 0 2px var(--accent); } /* keyboard/click focus */
 .pane.attention .pane-head {
   background: linear-gradient(90deg, rgba(240,136,62,0.16), var(--bg-panel-2));
 }
