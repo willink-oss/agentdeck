@@ -12,40 +12,31 @@ Agent Deck をパッケージマネージャ経由でインストールできる
 
 ## Homebrew Cask（macOS / Apple Silicon）
 
-未署名配布のため**公式 `homebrew/cask` ではなく自社 tap** で配るのが現実的（公式は知名度要件あり）。
+未署名配布のため**公式 `homebrew/cask` ではなく自社 tap** で配る（公式は知名度要件あり）。
+tap は **[`willink-oss/homebrew-tap`](https://github.com/willink-oss/homebrew-tap)** に作成済み。
+このリポの `packaging/homebrew/agentdeck.rb` が**正本**で、tap の `Casks/agentdeck.rb` に同期する。
 
-### 1. tap リポジトリを用意（初回のみ）
-
-tap は `homebrew-<name>` という命名が必須。例: `willink-oss/homebrew-tap`。
-
-```bash
-# 公開リポを作成し、cask を配置
-gh repo create willink-oss/homebrew-tap --public -d "Homebrew tap for i-Willink OSS"
-git clone https://github.com/willink-oss/homebrew-tap && cd homebrew-tap
-mkdir -p Casks
-cp /path/to/agentdeck/packaging/homebrew/agentdeck.rb Casks/agentdeck.rb
-git add Casks/agentdeck.rb && git commit -m "agentdeck 0.1.0" && git push
-```
-
-### 2. ユーザーのインストール
+### インストール（利用者）
 
 ```bash
-brew install --cask willink-oss/tap/agentdeck   # = willink-oss/homebrew-tap の Casks/agentdeck.rb
+brew install --cask willink-oss/tap/agentdeck
 ```
 
 > 未署名のため初回起動でブロックされたら、cask の caveats に出る手順
 > （`xattr -dr com.apple.quarantine "/Applications/Agent Deck.app"` か 右クリック→開く）で開く。
 
-### 3. 新バージョンを出すたびに（このリポの cask を更新 → tap へ反映）
+### 新バージョンを出すたびに（cask を更新 → tap へ同期）
 
 ```bash
-# 新しい .dmg を GitHub Releases に上げた後、その sha256 を取得
-shasum -a 256 "dist/Agent Deck-<VERSION>-arm64.dmg"
+# Releases に上がった .dmg の sha256 を取得（リリース実体から）
+gh release download vX.Y.Z -p '*.dmg' -D /tmp/dl && shasum -a 256 /tmp/dl/*.dmg
 # packaging/homebrew/agentdeck.rb の version と sha256 を更新してコミット
-# → tap リポの Casks/agentdeck.rb にコピーして push（自動化するなら CI で同期）
+# → tap リポの Casks/agentdeck.rb にコピーして push
+brew audit --cask --online willink-oss/tap/agentdeck   # url 到達性 + sha256 を検証
 ```
 
-`brew bump-cask-pr`（公式 tap 採用後）や `brew audit --cask Casks/agentdeck.rb` / `brew style` で検証可。
+> ⚠️ cask が **pre-release を指すと `brew audit` が警告**する（インストール自体は可）。
+> リリースは **正式版（pre-release を外す）**にしておくと audit がクリーン。
 
 ---
 

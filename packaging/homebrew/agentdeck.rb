@@ -2,18 +2,17 @@
 # 配布元は GitHub Releases。tap 経由で使う:  brew install --cask willink-oss/tap/agentdeck
 # リリースごとに version と sha256 を更新する（packaging/README.md の手順参照）。
 cask "agentdeck" do
-  version "0.1.0"
-  sha256 "a5d5abbe97219131be4ad8f7d08c34215e0c7f3f2090322cca775e38f5200ce0"
+  version "0.1.1"
+  sha256 "91dcdd0916d75f6836dd78ef94cff3a7a23fb080e03b27366cbc6679ddc6ac0b"
 
-  url "https://github.com/willink-oss/agentdeck/releases/download/v#{version}/Agent.Deck-#{version}-arm64.dmg",
-      verified: "github.com/willink-oss/agentdeck/"
+  url "https://github.com/willink-oss/agentdeck/releases/download/v#{version}/Agent.Deck-#{version}-arm64.dmg"
   name "Agent Deck"
   desc "Parallel AI agent terminal orchestrator with git-worktree isolation"
   homepage "https://github.com/willink-oss/agentdeck"
 
   # Apple Silicon 専用・未署名配布（Intel/Universal は未対応）
   depends_on arch: :arm64
-  depends_on macos: ">= :big_sur"
+  depends_on macos: :big_sur
 
   app "Agent Deck.app"
 
