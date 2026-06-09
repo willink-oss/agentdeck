@@ -23,3 +23,42 @@ jobs:
       # so we run them directly without installing electron/node-pty.
       - name: Run unit tests
         run: node --test
+
+  # Headless launch smoke on real Win/Linux/macOS runners. Docker can't faithfully
+  # run the Electron GUI cross-OS, so this is how we verify the per-OS runtime
+  # (boot + preload bridge + IPC + the node-pty native module). See e2e/smoke.cjs.
+  smoke:
+    name: smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Rebuild node-pty against Electron's ABI
+        run: npm run rebuild
+      - name: Install Playwright (driver only, no browsers)
+        # Pinned to the version the smoke was validated against locally, kept out of
+        # package.json so contributors don't pull Playwright + browsers on every install.
+        run: npm i --no-save --no-package-lock playwright@1.60.0
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - name: Install Linux runtime libs (xvfb + Electron shared libs)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          npx playwright install-deps chromium
+      - name: Smoke (Linux — headless via xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm run smoke
+      - name: Smoke (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: npm run smoke
