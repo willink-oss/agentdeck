@@ -1,6 +1,6 @@
 {
   "name": "agentdeck",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Parallel AI agent terminal orchestrator (Claude Code / Antigravity / any CLI agent) with git-worktree isolation and built-in diff review.",
   "main": "main.js",
   "author": "i-Willink",
@@ -30,7 +30,10 @@
     "appId": "com.iwillink.agentdeck",
     "productName": "Agent Deck",
     "copyright": "© 2026 i-Willink",
-    "directories": { "output": "dist", "buildResources": "build" },
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
     "files": [
       "**/*",
       "!**/*.test.js",
@@ -42,9 +45,18 @@
       "!HANDOFF.md",
       "!**/*.md"
     ],
-    "asarUnpack": ["**/node_modules/node-pty/**"],
+    "asarUnpack": [
+      "**/node_modules/node-pty/**"
+    ],
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["arm64"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns",
       "hardenedRuntime": true,
@@ -56,12 +68,28 @@
     "dmg": {
       "title": "Agent Deck ${version}",
       "contents": [
-        { "x": 140, "y": 210, "type": "file" },
-        { "x": 400, "y": 210, "type": "link", "path": "/Applications" }
+        {
+          "x": 140,
+          "y": 210,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 210,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.ico"
     },
     "nsis": {
@@ -70,7 +98,10 @@
       "allowToChangeInstallationDirectory": true
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "build/icon.png",
       "category": "Development",
       "maintainer": "i-Willink <yutaro_shirai@i-willink.com>"
