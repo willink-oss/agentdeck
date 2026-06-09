@@ -781,7 +781,16 @@ function paintDiff(diff, untracked) {
   const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const segs = window.GitDiff.diffToSegments(diff, untracked);
   let html = '';
-  for (const seg of segs) html += `<span class="${seg.cls}">${esc(seg.text) || '&nbsp;'}</span>`;
+  for (const seg of segs) {
+    if (seg.parts) {
+      // word-level: wrap changed tokens so they stand out within the +/- line
+      let inner = '';
+      for (const p of seg.parts) inner += p.changed ? `<span class="dl-word">${esc(p.text)}</span>` : esc(p.text);
+      html += `<span class="${seg.cls}">${inner || '&nbsp;'}</span>`;
+    } else {
+      html += `<span class="${seg.cls}">${esc(seg.text) || '&nbsp;'}</span>`;
+    }
+  }
   diffBody.innerHTML = html || '<span class="dl">(no changes)</span>';
 }
 

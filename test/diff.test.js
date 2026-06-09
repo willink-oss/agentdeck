@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyLine, diffToSegments } = require('../lib/diff');
+const { classifyLine, diffToSegments, wordDiff } = require('../lib/diff');
 
 test('classifyLine: file headers', () => {
   assert.equal(classifyLine('diff --git a/x b/x'), 'dl dl-file');
@@ -59,4 +59,53 @@ test('diffToSegments: appends untracked files section', () => {
 test('diffToSegments: handles null/undefined diff safely', () => {
   assert.doesNotThrow(() => diffToSegments(null, null));
   assert.doesNotThrow(() => diffToSegments(undefined));
+});
+
+test('wordDiff: identical strings have no changes', () => {
+  const r = wordDiff('const a = 1', 'const a = 1');
+  assert.ok(r.a.every((p) => !p.changed) && r.b.every((p) => !p.changed));
+});
+
+test('wordDiff: only the differing token is marked', () => {
+  const r = wordDiff('const a = 1', 'const a = 2');
+  assert.deepEqual(r.a.filter((p) => p.changed).map((p) => p.text), ['1']);
+  assert.deepEqual(r.b.filter((p) => p.changed).map((p) => p.text), ['2']);
+  assert.ok(r.a.some((p) => !p.changed && /const/.test(p.text)));
+});
+
+test('wordDiff: completely different -> all changed', () => {
+  assert.deepEqual(wordDiff('old', 'new').a, [{ text: 'old', changed: true }]);
+  assert.deepEqual(wordDiff('old', 'new').b, [{ text: 'new', changed: true }]);
+});
+
+test('wordDiff: appended word is the only change', () => {
+  const r = wordDiff('a b', 'a b c');
+  assert.ok(r.a.every((p) => !p.changed));
+  assert.equal(r.b.filter((p) => p.changed).map((p) => p.text).join('').trim(), 'c');
+});
+
+test('diffToSegments: paired -/+ lines get word-level parts', () => {
+  const segs = diffToSegments(['@@ -1 +1 @@', '-const a = 1', '+const a = 2'].join('\n'), []);
+  const del = segs.find((s) => s.cls === 'dl dl-del');
+  const add = segs.find((s) => s.cls === 'dl dl-add');
+  assert.ok(del.parts && add.parts, 'changed lines carry parts');
+  assert.deepEqual(del.parts[0], { text: '-', changed: false }); // leading marker not highlighted
+  assert.deepEqual(del.parts.filter((p) => p.changed).map((p) => p.text), ['1']);
+  assert.deepEqual(add.parts.filter((p) => p.changed).map((p) => p.text), ['2']);
+});
+
+test('diffToSegments: unequal -/+ blocks get no word parts', () => {
+  const segs = diffToSegments(['@@ -1,2 +1 @@', '-a', '-b', '+c'].join('\n'), []);
+  assert.ok(segs.filter((s) => s.cls === 'dl dl-del').every((s) => !s.parts));
+});
+
+test('diffToSegments: file-header (---/+++) lines never carry word parts', () => {
+  const segs = diffToSegments(['diff --git a/x b/x', '--- a/x', '+++ b/x', '@@ -1 +1 @@', '-a', '+b'].join('\n'), []);
+  assert.ok(segs.filter((s) => s.cls === 'dl dl-file').every((s) => !s.parts));
+});
+
+test('diffToSegments: very long -/+ lines skip word-diff (O(n*m) guard)', () => {
+  const long = 'x'.repeat(1600);
+  const segs = diffToSegments(['@@ -1 +1 @@', '-' + long, '+' + long + 'y'].join('\n'), []);
+  assert.ok(segs.filter((s) => s.cls === 'dl dl-del' || s.cls === 'dl dl-add').every((s) => !s.parts));
 });

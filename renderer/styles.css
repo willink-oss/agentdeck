@@ -577,3 +577,6 @@ select { appearance: none; cursor: pointer; }
 .dl-hunk { color: #61afef; }
 .dl-add  { color: #98c379; background: rgba(152,195,121,0.07); }
 .dl-del  { color: #e06c75; background: rgba(224,108,117,0.07); }
+/* word-level: emphasise the actually-changed tokens within a +/- line */
+.dl-add .dl-word { background: rgba(152,195,121,0.30); border-radius: 2px; }
+.dl-del .dl-word { background: rgba(224,108,117,0.30); border-radius: 2px; }
