@@ -512,6 +512,46 @@ select { appearance: none; cursor: pointer; }
 .palette-empty { padding: 14px 12px; font-size: 12px; color: var(--text-faint); text-align: center; }
 .palette-foot { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 10px; color: var(--text-faint); }
 
+/* ---------- agent preset manager (⚙) ---------- */
+.preset-manage {
+  background: none; border: none; padding: 0 2px; margin-left: 4px;
+  color: var(--text-faint); cursor: pointer; font-size: 12px; line-height: 1;
+}
+.preset-manage:hover { color: var(--accent); }
+.preset-overlay { position: fixed; inset: 0; z-index: 61; } /* above the ⌘K palette (60) */
+.preset-overlay[hidden] { display: none; }
+.preset-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
+.preset-panel {
+  position: absolute; top: 13vh; left: 50%; transform: translateX(-50%);
+  width: min(560px, 92vw);
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: paletteIn 0.14s ease-out;
+}
+.preset-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--line);
+}
+.preset-title { font-size: 13px; font-weight: 600; }
+.preset-list { list-style: none; margin: 0; padding: 6px; max-height: 44vh; overflow-y: auto; }
+.preset-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; min-width: 0; }
+.preset-row-name { font-size: 13px; color: var(--text); flex: none; }
+.preset-row-cmd {
+  font-size: 11px; color: var(--text-faint); flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.preset-row-tag { font-size: 10px; color: var(--text-faint); letter-spacing: 0.08em; }
+#preset-form { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+#preset-form input { flex: 1; min-width: 140px; }
+.preset-form-actions { display: flex; align-items: center; gap: 8px; width: 100%; }
+#preset-submit {
+  background: var(--bg-elev); border: 1px solid rgba(240,136,62,0.45); border-radius: 5px;
+  color: var(--accent); cursor: pointer; font-family: var(--mono);
+  font-size: 11px; padding: 5px 11px; transition: all 0.12s;
+}
+#preset-submit:hover { border-color: var(--accent); }
+
 /* terminal right-click menu */
 .term-menu {
   position: fixed; z-index: 70; min-width: 150px;

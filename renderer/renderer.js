@@ -1,13 +1,18 @@
 'use strict';
 
-/* Presets. `cmd` is auto-typed + run when the session starts. */
-const PRESETS = {
-  claude:      { label: 'Claude Code',  cmd: 'claude', badge: 'CLAUDE' },
-  antigravity: { label: 'Antigravity',  cmd: 'agy',    badge: 'ANTIGRAVITY' },
-  codex:       { label: 'Codex CLI',    cmd: 'codex',  badge: 'CODEX' },
-  gemini:      { label: 'Gemini CLI',   cmd: 'gemini', badge: 'GEMINI' },
-  shell:       { label: 'Plain shell',  cmd: '',       badge: 'SHELL' },
-};
+/* Presets. Built-ins live in lib/presets.js; user-defined presets are merged
+ * in from localStorage (custom list only). `cmd` is auto-typed + run on start. */
+const Presets = window.Presets;
+let customPresets = loadCustomPresets();
+let PRESETS = Presets.merge(customPresets);
+
+function loadCustomPresets() {
+  try { return Presets.normalizeCustom(JSON.parse(localStorage.getItem(Presets.KEY) || '[]')); }
+  catch (_) { return []; }
+}
+function saveCustomPresets() {
+  try { localStorage.setItem(Presets.KEY, JSON.stringify(customPresets)); } catch (_) {}
+}
 
 const TERM_THEME = {
   background: '#0c0d10', foreground: '#e6e8ee', cursor: '#f0883e',
@@ -81,6 +86,7 @@ window.addEventListener('blur', () => { windowFocused = false; });
 
 // ---- form init -------------------------------------------------------------
 function buildPresetOptions() {
+  presetSel.innerHTML = '';
   for (const [key, p] of Object.entries(PRESETS)) {
     const opt = document.createElement('option');
     opt.value = key; opt.textContent = p.label;
@@ -91,12 +97,23 @@ function buildPresetOptions() {
 }
 function buildQuickChips() {
   const host = $('#quick-chips');
-  for (const key of ['claude', 'antigravity', 'codex', 'gemini']) {
+  host.innerHTML = '';
+  for (const key of Presets.chipKeys(customPresets)) {
     const chip = document.createElement('button');
     chip.type = 'button'; chip.className = 'chip'; chip.textContent = PRESETS[key].label;
     chip.addEventListener('click', () => launch({ presetKey: key, command: PRESETS[key].cmd }));
     host.appendChild(chip);
   }
+}
+/** Re-merge + redraw the select and chips after a custom-preset change, keeping
+ *  the user's current selection (and typed command) when it still exists. */
+function rebuildPresetUI() {
+  PRESETS = Presets.merge(customPresets);
+  const prevKey = presetSel.value;
+  const prevCmd = commandInput.value;
+  buildPresetOptions(); // resets the selection to the claude default
+  if (PRESETS[prevKey]) { presetSel.value = prevKey; commandInput.value = prevCmd; }
+  buildQuickChips();
 }
 
 presetSel.addEventListener('change', () => { commandInput.value = PRESETS[presetSel.value].cmd; });
@@ -846,6 +863,7 @@ window.addEventListener('keydown', (e) => {
   if (!e.metaKey || e.ctrlKey || e.altKey) return;
   if (document.activeElement && document.activeElement.isContentEditable) return; // editing a name
   if (!paletteEl.hidden) return; // the open palette handles its own keys
+  if (!presetOverlay.hidden) return; // modal: keep ⌘W/⌘Enter/⌘K away from the deck behind it
   if (e.key === 'k' || e.key === 'K') { e.preventDefault(); openPalette(); }
   else if (e.key >= '1' && e.key <= '9') {
     const p = visiblePanes()[Number(e.key) - 1];
@@ -993,6 +1011,104 @@ paletteInput.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
 });
 $('#palette-backdrop').addEventListener('click', closePalette);
+
+// ---- agent preset manager (⚙): add / edit / delete user-defined presets -----
+const presetOverlay = $('#preset-overlay');
+const presetListEl = $('#preset-list');
+const presetForm = $('#preset-form');
+const presetLabelInput = $('#preset-label-input');
+const presetCmdInput = $('#preset-cmd-input');
+const presetSubmitBtn = $('#preset-submit');
+const presetCancelBtn = $('#preset-cancel');
+const presetFormMsg = $('#preset-form-msg');
+let editingPresetKey = null;
+
+function resetPresetForm() {
+  editingPresetKey = null;
+  presetForm.reset();
+  presetSubmitBtn.textContent = '＋ 追加';
+  presetCancelBtn.hidden = true;
+  presetFormMsg.hidden = true;
+}
+function renderPresetList() {
+  presetListEl.innerHTML = '';
+  for (const [key, p] of Object.entries(PRESETS)) {
+    const li = document.createElement('li');
+    li.className = 'preset-row';
+    const nm = document.createElement('span');
+    nm.className = 'preset-row-name'; nm.textContent = p.label;
+    const cmd = document.createElement('span');
+    cmd.className = 'preset-row-cmd'; cmd.textContent = p.cmd || '(shell)';
+    li.append(nm, cmd);
+    if (Presets.isBuiltin(key)) {
+      const tag = document.createElement('span');
+      tag.className = 'preset-row-tag'; tag.textContent = 'ビルトイン';
+      li.appendChild(tag);
+    } else {
+      const edit = document.createElement('button');
+      edit.type = 'button'; edit.className = 'ghost-btn'; edit.textContent = '編集';
+      edit.addEventListener('click', () => startPresetEdit(key));
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'ghost-btn'; del.textContent = '削除';
+      del.addEventListener('click', () => deletePreset(key));
+      li.append(edit, del);
+    }
+    presetListEl.appendChild(li);
+  }
+}
+function startPresetEdit(key) {
+  const c = customPresets.find((p) => p.key === key);
+  if (!c) return;
+  editingPresetKey = key;
+  presetLabelInput.value = c.label;
+  presetCmdInput.value = c.cmd;
+  presetSubmitBtn.textContent = '保存';
+  presetCancelBtn.hidden = false;
+  presetFormMsg.hidden = true;
+  presetLabelInput.focus();
+}
+function deletePreset(key) {
+  const c = customPresets.find((p) => p.key === key);
+  if (!c) return;
+  if (!confirm(`プリセット「${c.label}」を削除しますか？`)) return;
+  customPresets = customPresets.filter((p) => p.key !== key);
+  saveCustomPresets();
+  if (editingPresetKey === key) resetPresetForm();
+  rebuildPresetUI();
+  renderPresetList();
+}
+presetForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const v = Presets.validate(presetLabelInput.value, presetCmdInput.value);
+  if (!v.ok) { presetFormMsg.textContent = v.error; presetFormMsg.hidden = false; return; }
+  if (editingPresetKey) {
+    // edits keep the key so saved decks / live sessions stay attached to it
+    const c = customPresets.find((p) => p.key === editingPresetKey);
+    if (c) { c.label = v.label; c.cmd = v.cmd; }
+  } else {
+    const key = Presets.keyFor(v.label, Object.keys(PRESETS));
+    customPresets.push({ key, label: v.label, cmd: v.cmd });
+  }
+  saveCustomPresets();
+  resetPresetForm();
+  rebuildPresetUI();
+  renderPresetList();
+  presetLabelInput.focus();
+});
+presetCancelBtn.addEventListener('click', resetPresetForm);
+function openPresetManager() {
+  presetOverlay.hidden = false;
+  resetPresetForm();
+  renderPresetList();
+  presetLabelInput.focus();
+}
+function closePresetManager() { presetOverlay.hidden = true; }
+$('#preset-manage').addEventListener('click', openPresetManager);
+$('#preset-close').addEventListener('click', closePresetManager);
+$('#preset-backdrop').addEventListener('click', closePresetManager);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !presetOverlay.hidden) closePresetManager();
+});
 
 // ---- terminal context menu (right-click: copy / paste / select all / clear) ----
 const termMenu = $('#term-menu');

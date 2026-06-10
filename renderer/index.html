@@ -38,7 +38,9 @@
 
       <form id="launch-form" autocomplete="off">
         <label class="field">
-          <span class="field-label">Agent</span>
+          <span class="field-label">Agent
+            <button type="button" id="preset-manage" class="preset-manage" title="プリセットを管理">&#9881;</button>
+          </span>
           <select id="preset"></select>
         </label>
 
@@ -148,6 +150,26 @@
     </div>
   </div>
 
+  <div id="preset-overlay" class="preset-overlay" hidden>
+    <div class="preset-backdrop" id="preset-backdrop"></div>
+    <div class="preset-panel">
+      <div class="preset-head">
+        <span class="preset-title">Agent presets</span>
+        <button type="button" id="preset-close" class="ghost-btn">close</button>
+      </div>
+      <ul id="preset-list" class="preset-list"></ul>
+      <form id="preset-form" autocomplete="off">
+        <input id="preset-label-input" type="text" spellcheck="false" placeholder="表示名（例: Aider）" />
+        <input id="preset-cmd-input" type="text" spellcheck="false" placeholder="起動コマンド（例: aider）" />
+        <div class="preset-form-actions">
+          <button type="submit" id="preset-submit">＋ 追加</button>
+          <button type="button" id="preset-cancel" class="ghost-btn" hidden>キャンセル</button>
+          <span id="preset-form-msg" class="field-hint" hidden></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="term-menu" class="term-menu" hidden>
     <button type="button" data-act="copy">コピー</button>
     <button type="button" data-act="paste">ペースト</button>
@@ -171,6 +193,7 @@
   <script src="../lib/layout.js"></script>
   <script src="../lib/workspace.js"></script>
   <script src="../lib/fuzzy.js"></script>
+  <script src="../lib/presets.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
