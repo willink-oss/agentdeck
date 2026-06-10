@@ -28,6 +28,15 @@ const ROOT = path.join(__dirname, '..');
 const TIMEOUT = 60000;
 const fail = (msg) => { console.error('SMOKE FAIL:', msg); process.exitCode = 1; throw new Error(msg); };
 
+/** Close the app but never let teardown decide the test's fate: a graceful close
+ *  gets 15s, then the Electron child is SIGKILLed (app.close() has wedged after
+ *  fully green runs on both CI and local machines). */
+async function closeHard(app) {
+  if (!app) return;
+  try { await Promise.race([app.close(), new Promise((r) => setTimeout(r, 15000))]); } catch (_) {}
+  try { const p = app.process(); if (p && !p.killed) p.kill('SIGKILL'); } catch (_) {}
+}
+
 (async () => {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentdeck-smoke-'));
   const app = await electron.launch({
@@ -82,10 +91,10 @@ const fail = (msg) => { console.error('SMOKE FAIL:', msg); process.exitCode = 1;
     if (pageErrors.length) fail(`renderer threw ${pageErrors.length} error(s): ${pageErrors.join(' | ')}`);
     console.log('SMOKE PASS');
   } finally {
-    try { await app.close(); } catch (_) {}
+    await closeHard(app);
     try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_) {}
   }
 })().catch((err) => {
   console.error(err && err.stack ? err.stack : err);
   process.exitCode = process.exitCode || 1;
-});
+}).finally(() => process.exit(process.exitCode || 0)); // teardown must never wedge a green run
