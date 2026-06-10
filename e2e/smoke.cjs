@@ -11,7 +11,7 @@
  *   3. IPC round-trips main <-> renderer (app:info),
  *   4. the node-pty NATIVE module spawns a real shell and streams bytes
  *      (ConPTY on Windows, forkpty on *nix) — the dep most likely to break per-OS.
- * It also confirms renderer.js executed (it fills the #preset <select> at boot).
+ * It also confirms the renderer scripts executed (boot fills the #preset <select>).
  * This is a boot/runtime smoke, NOT a visual/rendering check.
  *
  * Run locally:
@@ -48,7 +48,7 @@ const fail = (msg) => { console.error('SMOKE FAIL:', msg); process.exitCode = 1;
     win.on('pageerror', (e) => { pageErrors.push(e && e.message); console.error('renderer pageerror:', e && e.message); });
     await win.waitForLoadState('domcontentloaded');
 
-    // 1) Renderer shell is present, and renderer.js executed (it builds #preset options at boot).
+    // 1) Renderer shell is present and the renderer scripts ran (boot builds #preset options).
     await win.waitForSelector('#repo-list', { timeout: TIMEOUT });
     const title = (await win.textContent('.repos-title')) || '';
     if (!/Repositories/i.test(title)) fail('repo sidebar did not render');
