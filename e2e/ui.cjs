@@ -38,18 +38,22 @@ const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encodi
   git(repo, 'commit', '-m', 'initial');
 
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentdeck-ui-ud-'));
-  const app = await electron.launch({
+  const launchApp = () => electron.launch({
     args: [path.join(ROOT, 'main.js'), `--user-data-dir=${userDataDir}`],
     env: { ...process.env, AGENTDECK_UPDATE_FEED: 'https://127.0.0.1:9/none' },
     timeout: TIMEOUT,
   });
+  let app = await launchApp();
+  let win;
 
   try {
-    const win = await app.firstWindow({ timeout: TIMEOUT });
-    win.on('dialog', (d) => d.accept());
-    win.on('pageerror', (e) => console.error('renderer pageerror:', e && e.message));
-    const booted = () => win.waitForFunction(() => document.querySelectorAll('#preset option').length > 0, null, { timeout: TIMEOUT });
-    await booted();
+    const attachWindow = async () => {
+      win = await app.firstWindow({ timeout: TIMEOUT });
+      win.on('dialog', (d) => d.accept());
+      win.on('pageerror', (e) => console.error('renderer pageerror:', e && e.message));
+      await win.waitForFunction(() => document.querySelectorAll('#preset option').length > 0, null, { timeout: TIMEOUT });
+    };
+    await attachWindow();
 
     // -- setup: register the repo, launch "alpha" (repo) and "beta" (home) ----
     await app.evaluate(({ dialog }, dir) => {
@@ -173,18 +177,27 @@ const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encodi
     ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 6, 'custom preset lands in the select');
     await win.keyboard.press('Escape');
 
-    // -- reload: layout + presets persist; the saved deck restores -------------------
-    await win.reload();
-    await booted();
-    ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 6, 'reload: custom preset persisted');
+    // -- real restart: layout + presets persist; the saved deck restores -------------
+    // a full close + relaunch (same user-data-dir), not win.reload(): reload keeps the
+    // main process alive, orphaning the live PTYs (a state real usage can't produce —
+    // and one that wedged app.close() on CI). Restart also tests true persistence.
+    await app.close();
+    app = await launchApp();
+    await attachWindow();
+    ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 6, 'restart: custom preset persisted');
     ok(await win.evaluate(() => document.querySelector('#grid').style.gridTemplateColumns.includes('repeat(2')),
-      'reload: layout choice persisted');
+      'restart: layout choice persisted');
     await win.waitForFunction(() => {
       const b = document.querySelector('#restore-deck');
       return b && !b.hidden && b.textContent.includes('(2)');
     }, null, { timeout: TIMEOUT });
     await win.click('#restore-deck');
-    await win.waitForFunction(() => document.querySelectorAll('.pane').length === 2, null, { timeout: TIMEOUT });
+    // restore launches sequentially and ends by activating the last config (beta) —
+    // waiting for that means every spawn has settled before we close the app
+    await win.waitForFunction(() =>
+      document.querySelectorAll('.pane').length === 2 &&
+      (document.querySelector('.pane.active .pane-name') || {}).textContent === 'beta',
+      null, { timeout: TIMEOUT });
     const names = await win.evaluate(() => [...document.querySelectorAll('.pane .pane-name')].map((el) => el.textContent));
     ok(names.includes('alpha-x') && names.includes('beta'), `restore: deck re-spawned with kept names (${names.join(',')})`);
 
