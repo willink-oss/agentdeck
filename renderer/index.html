@@ -194,6 +194,9 @@
   <script src="../lib/workspace.js"></script>
   <script src="../lib/fuzzy.js"></script>
   <script src="../lib/presets.js"></script>
+  <!-- renderer scripts: classic scripts share one global lexical scope — order matters -->
+  <script src="00-state.js"></script>
+  <script src="01-launch-form.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
