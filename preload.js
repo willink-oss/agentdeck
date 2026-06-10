@@ -3,6 +3,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('deck', {
+  platform: process.platform, // sync: keyboard chords are chosen before any IPC answers
   spawn: (opts) => ipcRenderer.invoke('pty:spawn', opts),
   input: (id, data) => ipcRenderer.send('pty:input', { id, data }),
   resize: (id, cols, rows) => ipcRenderer.send('pty:resize', { id, cols, rows }),

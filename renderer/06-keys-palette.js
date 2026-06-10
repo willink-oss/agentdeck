@@ -11,32 +11,60 @@ function cyclePane(dir) {
   if (i < 0) i = dir > 0 ? -1 : 0;
   focusSession(panes[(i + dir + panes.length) % panes.length].dataset.id);
 }
+// Platform chord: ⌘ on macOS, Ctrl+Shift elsewhere. Plain Ctrl-combos (Ctrl+W,
+// Ctrl+[, Ctrl+1 …) are terminal/readline keys — hijacking them would break the
+// shell — so Windows/Linux follow the terminal-app convention (Windows Terminal,
+// gnome-terminal etc.) of reserving Ctrl+Shift for the app itself.
+const IS_MAC = window.deck.platform === 'darwin';
+const appChord = IS_MAC
+  ? (e) => e.metaKey && !e.ctrlKey && !e.altKey
+  : (e) => e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey;
+/** Normalise the pressed key to a Digit1/BracketLeft/KeyW-style token.
+ *  mac (no Shift in the chord): match on e.key — layout-aware, so ⌘[ is the key
+ *  *labelled* [ on JIS keyboards (whose physical code is BracketRight).
+ *  non-mac (Ctrl+Shift): Shift mutates e.key ('1' -> '!'), so match the physical
+ *  e.code instead — stable under the chord, at the cost of layout-blindness. */
+function chordKey(e) {
+  if (!IS_MAC) return e.code;
+  const k = e.key;
+  if (k >= '1' && k <= '9') return 'Digit' + k;
+  if (k === '[') return 'BracketLeft';
+  if (k === ']') return 'BracketRight';
+  if (k === 'Enter') return 'Enter';
+  const u = typeof k === 'string' ? k.toUpperCase() : '';
+  if (u === 'W' || u === 'K' || u === 'C' || u === 'A') return 'Key' + u;
+  return '';
+}
 window.addEventListener('keydown', (e) => {
-  // ⌘ only (macOS): Ctrl-combos (Ctrl+W, Ctrl+[, Ctrl+1 …) are terminal/readline keys —
-  // hijacking them would break the shell. Windows/Linux builds will need a different binding.
-  if (!e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!appChord(e)) return;
   if (document.activeElement && document.activeElement.isContentEditable) return; // editing a name
   if (!paletteEl.hidden) return; // the open palette handles its own keys
   if (!presetOverlay.hidden) return; // modal: keep ⌘W/⌘Enter/⌘K away from the deck behind it
-  if (e.key === 'k' || e.key === 'K') { e.preventDefault(); openPalette(); }
-  else if (e.key >= '1' && e.key <= '9') {
-    const p = visiblePanes()[Number(e.key) - 1];
+  const code = chordKey(e);
+  if (code === 'KeyK') { e.preventDefault(); openPalette(); }
+  else if (code >= 'Digit1' && code <= 'Digit9') {
+    const p = visiblePanes()[Number(code.slice(5)) - 1];
     if (p) { e.preventDefault(); focusSession(p.dataset.id); }
-  } else if (e.key === ']') { e.preventDefault(); cyclePane(1); }
-  else if (e.key === '[') { e.preventDefault(); cyclePane(-1); }
-  // ⌘Enter deliberately works even while a form input is focused (quick launch from anywhere)
-  else if (e.key === 'Enter') { e.preventDefault(); launch(currentLaunchOpts()); }
-  else if (e.key === 'w' || e.key === 'W') {
+  } else if (code === 'BracketRight') { e.preventDefault(); cyclePane(1); }
+  else if (code === 'BracketLeft') { e.preventDefault(); cyclePane(-1); }
+  // chord+Enter deliberately works even while a form input is focused (quick launch from anywhere)
+  else if (code === 'Enter') { e.preventDefault(); launch(currentLaunchOpts()); }
+  else if (code === 'KeyW') {
     if (activeSessionId && sessions.has(activeSessionId)) { e.preventDefault(); killSession(activeSessionId); }
-  } else if (e.key === 'c' || e.key === 'C') {
-    // copy the terminal's visual selection (xterm's selection isn't in the textarea, so ⌘C wouldn't catch it)
+  } else if (code === 'KeyC') {
+    // copy the terminal's visual selection (xterm's selection isn't in the textarea, so a plain copy wouldn't catch it)
     const s = focusedSession();
     if (s && s.term.hasSelection()) { e.preventDefault(); window.deck.clipboardWrite(s.term.getSelection()); }
-  } else if (e.key === 'a' || e.key === 'A') {
+  } else if (code === 'KeyA') {
     const s = focusedSession();
     if (s) { e.preventDefault(); s.term.selectAll(); }
   }
 });
+// the static hint markup is written for macOS; relabel for the Ctrl+Shift chord
+if (!IS_MAC) {
+  const kbdHint = document.querySelector('.kbd-hint');
+  if (kbdHint) kbdHint.textContent = 'Ctrl+Shift+K 検索 · Ctrl+Shift+1–9 ペイン · Ctrl+Shift+[ ] 移動 · Ctrl+Shift+Enter 起動 · Ctrl+Shift+W 終了';
+}
 /** The session whose terminal currently holds keyboard focus, or null. */
 function focusedSession() {
   const ae = document.activeElement;

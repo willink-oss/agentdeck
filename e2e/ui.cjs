@@ -22,6 +22,8 @@ const { _electron: electron } = require('playwright');
 
 const ROOT = path.join(__dirname, '..');
 const TIMEOUT = 60000;
+// the app's shortcut chord is per-platform (⌘ on mac, Ctrl+Shift elsewhere) — test the real one
+const MOD = process.platform === 'darwin' ? 'Meta' : 'Control+Shift';
 setTimeout(() => { console.error('UI FAIL: global 5min deadline exceeded'); process.exit(1); }, 300000).unref();
 const ok = (cond, msg) => { if (!cond) throw new Error('UI FAIL: ' + msg); console.log('  ✓ ' + msg); };
 const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
@@ -98,28 +100,28 @@ async function closeHard(app) {
       (document.querySelector('.pane.active .pane-name') || {}).textContent);
 
     // -- keyboard shortcuts ----------------------------------------------------
-    await win.keyboard.press('Meta+1');
+    await win.keyboard.press(`${MOD}+Digit1`);
     ok(await activeName() === 'alpha', '⌘1 focuses the first pane');
-    await win.keyboard.press('Meta+2');
+    await win.keyboard.press(`${MOD}+Digit2`);
     ok(await activeName() === 'beta', '⌘2 focuses the second pane');
-    await win.keyboard.press('Meta+[');
+    await win.keyboard.press(`${MOD}+BracketLeft`);
     ok(await activeName() === 'alpha', '⌘[ cycles back');
-    await win.keyboard.press('Meta+]');
+    await win.keyboard.press(`${MOD}+BracketRight`);
     ok(await activeName() === 'beta', '⌘] cycles forward');
     await win.fill('#name', 'gamma');
-    await win.keyboard.press('Meta+Enter');
+    await win.keyboard.press(`${MOD}+Enter`);
     // the pane is appended synchronously but markActive lands after the spawn resolves
     await win.waitForFunction(() =>
       (document.querySelector('.pane.active .pane-name') || {}).textContent === 'gamma',
       null, { timeout: TIMEOUT });
     ok(await win.evaluate(() => document.querySelectorAll('.pane').length) === 3, '⌘Enter launches from the form');
-    await win.keyboard.press('Meta+w');
+    await win.keyboard.press(`${MOD}+KeyW`);
     await win.waitForFunction(() => document.querySelectorAll('.pane').length === 2, null, { timeout: TIMEOUT });
     ok(true, '⌘W kills the active pane');
     await win.fill('#name', '');
 
     // -- ⌘K palette --------------------------------------------------------------
-    await win.keyboard.press('Meta+k');
+    await win.keyboard.press(`${MOD}+KeyK`);
     ok(await win.evaluate(() => !document.querySelector('#palette').hidden), '⌘K opens the palette');
     await win.keyboard.type('alp');
     await win.waitForFunction(() => {
@@ -130,7 +132,7 @@ async function closeHard(app) {
     await win.keyboard.press('Enter');
     ok(await win.evaluate(() => document.querySelector('#palette').hidden), 'Enter commits and closes the palette');
     ok(await activeName() === 'alpha', 'palette jump focuses the matched session');
-    await win.keyboard.press('Meta+k');
+    await win.keyboard.press(`${MOD}+KeyK`);
     await win.keyboard.press('Escape');
     ok(await win.evaluate(() => document.querySelector('#palette').hidden), 'Escape closes the palette');
 
@@ -171,7 +173,7 @@ async function closeHard(app) {
     ok(await win.evaluate(() => document.querySelector('#term-menu').hidden), 'Escape closes the terminal menu');
 
     // -- diff drawer open/close glue ----------------------------------------------
-    await win.keyboard.press('Meta+1'); // alpha-x (repo session)
+    await win.keyboard.press(`${MOD}+Digit1`); // alpha-x (repo session)
     await win.click('.pane .pane-diff');
     await win.waitForFunction(() => !document.querySelector('#diff-overlay').hidden, null, { timeout: TIMEOUT });
     ok(true, 'diff drawer opens for a repo session');
