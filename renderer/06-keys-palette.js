@@ -35,31 +35,36 @@ function chordKey(e) {
   if (u === 'W' || u === 'K' || u === 'C' || u === 'A') return 'Key' + u;
   return '';
 }
+// Capture phase: with a terminal focused, xterm handles some Ctrl+Shift combos
+// itself (Ctrl+Shift+2 = the classic Ctrl+@ NUL) and stops propagation, so a
+// bubble-phase listener never hears them. Capturing first — and stopping
+// propagation whenever we act — makes app chords always win over xterm (and
+// keeps stray bytes like ^@ / \r out of the shell).
 window.addEventListener('keydown', (e) => {
   if (!appChord(e)) return;
   if (document.activeElement && document.activeElement.isContentEditable) return; // editing a name
   if (!paletteEl.hidden) return; // the open palette handles its own keys
   if (!presetOverlay.hidden) return; // modal: keep ⌘W/⌘Enter/⌘K away from the deck behind it
   const code = chordKey(e);
-  if (code === 'KeyK') { e.preventDefault(); openPalette(); }
+  if (code === 'KeyK') { e.preventDefault(); e.stopPropagation(); openPalette(); }
   else if (code >= 'Digit1' && code <= 'Digit9') {
     const p = visiblePanes()[Number(code.slice(5)) - 1];
-    if (p) { e.preventDefault(); focusSession(p.dataset.id); }
-  } else if (code === 'BracketRight') { e.preventDefault(); cyclePane(1); }
-  else if (code === 'BracketLeft') { e.preventDefault(); cyclePane(-1); }
+    if (p) { e.preventDefault(); e.stopPropagation(); focusSession(p.dataset.id); }
+  } else if (code === 'BracketRight') { e.preventDefault(); e.stopPropagation(); cyclePane(1); }
+  else if (code === 'BracketLeft') { e.preventDefault(); e.stopPropagation(); cyclePane(-1); }
   // chord+Enter deliberately works even while a form input is focused (quick launch from anywhere)
-  else if (code === 'Enter') { e.preventDefault(); launch(currentLaunchOpts()); }
+  else if (code === 'Enter') { e.preventDefault(); e.stopPropagation(); launch(currentLaunchOpts()); }
   else if (code === 'KeyW') {
-    if (activeSessionId && sessions.has(activeSessionId)) { e.preventDefault(); killSession(activeSessionId); }
+    if (activeSessionId && sessions.has(activeSessionId)) { e.preventDefault(); e.stopPropagation(); killSession(activeSessionId); }
   } else if (code === 'KeyC') {
     // copy the terminal's visual selection (xterm's selection isn't in the textarea, so a plain copy wouldn't catch it)
     const s = focusedSession();
-    if (s && s.term.hasSelection()) { e.preventDefault(); window.deck.clipboardWrite(s.term.getSelection()); }
+    if (s && s.term.hasSelection()) { e.preventDefault(); e.stopPropagation(); window.deck.clipboardWrite(s.term.getSelection()); }
   } else if (code === 'KeyA') {
     const s = focusedSession();
-    if (s) { e.preventDefault(); s.term.selectAll(); }
+    if (s) { e.preventDefault(); e.stopPropagation(); s.term.selectAll(); }
   }
-});
+}, true);
 // the static hint markup is written for macOS; relabel for the Ctrl+Shift chord
 if (!IS_MAC) {
   const kbdHint = document.querySelector('.kbd-hint');
