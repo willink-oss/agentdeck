@@ -131,9 +131,16 @@ agentdeck/
 │   ├── fuzzy.js         #   score（⌘K パレットの部分列マッチ）
 │   ├── version.js       #   compare / isNewer（アップデートチェック）
 │   └── presets.js       #   ビルトイン定義 + validate / keyFor / merge（プリセット管理）
-├── renderer/            # サイドバー（マルチリポ）＋ターミナルグリッド＋diff ドロワー
-│   ├── index.html
-│   ├── renderer.js
+├── renderer/            # UI（順序ロードの classic script 群 — global lexical scope を共有）
+│   ├── index.html       #   script の並び順がロード順（boot を含む 07 が必ず最後）
+│   ├── 00-state.js      #   共有状態・定数・DOM refs・lib バインディング
+│   ├── 01-launch-form.js#   起動フォーム（preset select / quick chips）
+│   ├── 02-repos.js      #   リポジトリパネル（サイドバー・ポーリング・フィルタ）
+│   ├── 03-deck.js       #   レイアウト切替・ペイン並べ替え・デッキ保存/復元
+│   ├── 04-sessions.js   #   セッション起動/kill・attention 検知・PTY ルーティング
+│   ├── 05-diff.js       #   diff ドロワー（merge / PR）
+│   ├── 06-keys-palette.js #  ⌘ショートカット・リネーム・⌘K パレット
+│   ├── 07-overlays-boot.js # プリセット管理・右クリックメニュー・update toast・boot
 │   └── styles.css
 ├── e2e/
 │   └── smoke.cjs        # CI 用ヘッドレス起動スモーク（3 OS・起動/preload/IPC/node-pty）
