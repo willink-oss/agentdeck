@@ -114,8 +114,8 @@
     "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.6.0",
-    "electron": "^39.8.5",
+    "@electron/rebuild": "^4.0.4",
+    "electron": "^42.4.0",
     "electron-builder": "^26.15.2"
   }
 }
