@@ -26,6 +26,15 @@ setTimeout(() => { console.error('UI FAIL: global 5min deadline exceeded'); proc
 const ok = (cond, msg) => { if (!cond) throw new Error('UI FAIL: ' + msg); console.log('  ✓ ' + msg); };
 const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
 
+/** Close the app but never let teardown decide the test's fate: a graceful close
+ *  gets 15s, then the Electron child is SIGKILLed (the macOS CI runner has shown
+ *  app.close() wedging after a fully green run). */
+async function closeHard(app) {
+  if (!app) return;
+  try { await Promise.race([app.close(), new Promise((r) => setTimeout(r, 15000))]); } catch (_) {}
+  try { const p = app.process(); if (p && !p.killed) p.kill('SIGKILL'); } catch (_) {}
+}
+
 (async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'agentdeck-ui-'));
   const repo = path.join(base, 'svc-a');
@@ -181,7 +190,7 @@ const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encodi
     // a full close + relaunch (same user-data-dir), not win.reload(): reload keeps the
     // main process alive, orphaning the live PTYs (a state real usage can't produce —
     // and one that wedged app.close() on CI). Restart also tests true persistence.
-    await app.close();
+    await closeHard(app);
     app = await launchApp();
     await attachWindow();
     ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 6, 'restart: custom preset persisted');
@@ -203,11 +212,11 @@ const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encodi
 
     console.log('UI PASS');
   } finally {
-    try { await app.close(); } catch (_) {}
+    await closeHard(app);
     try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_) {}
     try { fs.rmSync(base, { recursive: true, force: true }); } catch (_) {}
   }
 })().catch((err) => {
   console.error(err && err.stack ? err.stack : err);
   process.exitCode = process.exitCode || 1;
-});
+}).finally(() => process.exit(process.exitCode || 0)); // teardown must never wedge a green run
