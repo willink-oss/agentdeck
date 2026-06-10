@@ -136,6 +136,11 @@
         </div>
       </div>
       <div id="diff-meta" class="diff-meta"></div>
+      <div id="diff-files" class="diff-files" hidden>
+        <button type="button" id="diff-prev-file" class="ghost-btn df-nav" title="前のファイル">↑</button>
+        <button type="button" id="diff-next-file" class="ghost-btn df-nav" title="次のファイル">↓</button>
+        <div id="diff-file-list" class="diff-file-list"></div>
+      </div>
       <pre id="diff-body" class="diff-body"></pre>
     </div>
   </div>
@@ -194,6 +199,7 @@
   <script src="../lib/workspace.js"></script>
   <script src="../lib/fuzzy.js"></script>
   <script src="../lib/presets.js"></script>
+  <script src="../lib/syntax.js"></script>
   <!-- renderer scripts: classic scripts share one global lexical scope — order matters -->
   <script src="00-state.js"></script>
   <script src="01-launch-form.js"></script>

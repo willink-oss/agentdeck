@@ -30,6 +30,15 @@ setTimeout(() => { console.error('FLOW FAIL: global 5min deadline exceeded'); pr
 const ok = (cond, msg) => { if (!cond) throw new Error('FLOW FAIL: ' + msg); console.log('  ✓ ' + msg); };
 const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
 
+/** Close the app but never let teardown decide the test's fate: a graceful close
+ *  gets 15s, then the Electron child is SIGKILLed (app.close() has wedged after
+ *  fully green runs on both CI and local machines). */
+async function closeHard(app) {
+  if (!app) return;
+  try { await Promise.race([app.close(), new Promise((r) => setTimeout(r, 15000))]); } catch (_) {}
+  try { const p = app.process(); if (p && !p.killed) p.kill('SIGKILL'); } catch (_) {}
+}
+
 (async () => {
   // -- a throwaway repo with one committed file ------------------------------
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'agentdeck-flow-'));
@@ -40,7 +49,8 @@ const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encodi
   git(repo, 'config', 'user.name', 'agentdeck e2e');
   const serverJs = 'const port = 3000;\nconst host = "localhost";\nconsole.log("boot", host, port);\n';
   fs.writeFileSync(path.join(repo, 'server.js'), serverJs);
-  git(repo, 'add', 'server.js');
+  fs.writeFileSync(path.join(repo, 'util.js'), 'function add(a, b) { return a + b; }\n');
+  git(repo, 'add', 'server.js', 'util.js');
   git(repo, 'commit', '-m', 'initial');
 
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentdeck-flow-ud-'));
@@ -82,8 +92,9 @@ const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encodi
 
     // 3) commit a change in the worktree, then review it in the diff drawer
     fs.writeFileSync(path.join(wt, 'server.js'), serverJs.replace('3000', '8080'));
-    git(wt, 'add', 'server.js');
-    git(wt, 'commit', '-m', 'tune: listen on 8080');
+    fs.appendFileSync(path.join(wt, 'util.js'), 'function sub(a, b) { return a - b; }\n');
+    git(wt, 'add', 'server.js', 'util.js');
+    git(wt, 'commit', '-m', 'tune: listen on 8080; add sub()');
     await win.click('.pane .pane-diff');
     await win.waitForFunction(() => {
       const o = document.querySelector('#diff-overlay');
@@ -93,6 +104,17 @@ const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encodi
     const words = await win.evaluate(() =>
       [...document.querySelectorAll('#diff-body .dl-word')].map((el) => el.textContent));
     ok(words.includes('3000') && words.includes('8080'), `word-level highlight marks exactly the port (${words.join(',')})`);
+    ok(await win.evaluate(() => document.querySelectorAll('#diff-body .sx-kw').length > 0),
+      'syntax highlighting colours js keywords');
+    // per-file navigation: two files changed -> bar visible with two chips; the
+    // second chip jumps and becomes active
+    ok(await win.evaluate(() => !document.querySelector('#diff-files').hidden), 'file nav bar shown for a 2-file diff');
+    const chips = await win.evaluate(() => [...document.querySelectorAll('.df-item')].map((el) => el.textContent));
+    ok(chips.length === 2 && chips.includes('server.js') && chips.includes('util.js'),
+      `file nav lists both files (${chips.join(',')})`);
+    await win.evaluate(() => document.querySelectorAll('.df-item')[1].click());
+    ok(await win.evaluate(() => document.querySelectorAll('.df-item')[1].classList.contains('active')),
+      'clicking a file chip activates it (jump)');
     ok(await win.evaluate(() => !document.querySelector('#diff-merge').hidden), 'merge button offered for the worktree session');
 
     // 4) merge back into the base checkout from the drawer
@@ -105,11 +127,11 @@ const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encodi
 
     console.log('FLOW PASS');
   } finally {
-    try { await app.close(); } catch (_) {}
+    await closeHard(app);
     try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_) {}
     try { fs.rmSync(base, { recursive: true, force: true }); } catch (_) {}
   }
 })().catch((err) => {
   console.error(err && err.stack ? err.stack : err);
   process.exitCode = process.exitCode || 1;
-});
+}).finally(() => process.exit(process.exitCode || 0)); // teardown must never wedge a green run

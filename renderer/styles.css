@@ -620,3 +620,25 @@ select { appearance: none; cursor: pointer; }
 /* word-level: emphasise the actually-changed tokens within a +/- line */
 .dl-add .dl-word { background: rgba(152,195,121,0.30); border-radius: 2px; }
 .dl-del .dl-word { background: rgba(224,108,117,0.30); border-radius: 2px; }
+/* syntax tokens (text colour — composes with the dl-word background) */
+.dl .sx-kw  { color: #c678dd; }
+.dl .sx-str { color: #98c379; }
+.dl .sx-num { color: #e5c07b; }
+.dl .sx-com { color: var(--text-dim); font-style: italic; }
+/* add/del lines keep their tint via background; let syntax own the text colour */
+
+/* per-file navigation bar (hidden for single-file diffs) */
+.diff-files {
+  display: flex; align-items: center; gap: 6px; padding: 6px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.diff-files[hidden] { display: none; }
+.df-nav { padding: 3px 8px; }
+.diff-file-list { display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; min-width: 0; }
+.df-item {
+  background: none; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--text-dim); cursor: pointer; font-family: var(--mono);
+  font-size: 10px; padding: 3px 10px; flex: none; transition: all 0.12s;
+}
+.df-item:hover { color: var(--text); border-color: var(--accent-soft); }
+.df-item.active { color: var(--accent); border-color: rgba(240,136,62,0.45); }

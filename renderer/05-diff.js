@@ -30,9 +30,65 @@ async function renderDiff(s) {
 }
 function paintDiff(diff, untracked) {
   // escaping + assembly live in lib/diff.js (segmentsToHtml) so CI covers the XSS path
-  const html = window.GitDiff.segmentsToHtml(window.GitDiff.diffToSegments(diff, untracked));
+  const segs = window.GitDiff.diffToSegments(diff, untracked);
+  const html = window.GitDiff.segmentsToHtml(segs, window.Syntax);
   diffBody.innerHTML = html || '<span class="dl">(no changes)</span>';
+  renderFileNav(window.GitDiff.fileIndex(segs));
 }
+
+// ---- per-file navigation (chips + prev/next + scroll-spy) -------------------
+let diffFiles = [];   // [{path, idx}] — idx doubles as the #diff-body child index
+let diffFileIdx = -1;
+function renderFileNav(files) {
+  diffFiles = files;
+  diffFileIdx = files.length ? 0 : -1;
+  diffFileList.innerHTML = '';
+  diffFilesBar.hidden = files.length < 2; // single-file diffs need no nav
+  files.forEach((f, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'df-item' + (i === 0 ? ' active' : '');
+    b.textContent = f.path;
+    b.title = f.path;
+    b.addEventListener('click', () => jumpToFile(i));
+    diffFileList.appendChild(b);
+  });
+}
+function setActiveFile(i) {
+  if (i < 0 || i >= diffFiles.length) return;
+  diffFileIdx = i;
+  [...diffFileList.children].forEach((el, idx) => el.classList.toggle('active', idx === i));
+  const chip = diffFileList.children[i];
+  if (chip) chip.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+function jumpToFile(i) {
+  if (i < 0 || i >= diffFiles.length) return;
+  // the .dl spans aren't offsetParent-ed to the <pre>, so position via rects
+  const target = diffBody.children[diffFiles[i].idx];
+  if (target) diffBody.scrollTop += target.getBoundingClientRect().top - diffBody.getBoundingClientRect().top;
+  setActiveFile(i);
+}
+$('#diff-prev-file').addEventListener('click', () => jumpToFile(Math.max(0, diffFileIdx - 1)));
+$('#diff-next-file').addEventListener('click', () => jumpToFile(Math.min(diffFiles.length - 1, diffFileIdx + 1)));
+let diffSpyRaf = 0;
+diffBody.addEventListener('scroll', () => {
+  if (diffSpyRaf || diffFiles.length < 2) return;
+  diffSpyRaf = requestAnimationFrame(() => {
+    diffSpyRaf = 0;
+    let cur;
+    if (diffBody.scrollTop + diffBody.clientHeight >= diffBody.scrollHeight - 1) {
+      cur = diffFiles.length - 1; // at the bottom the last file wins, even if its header can't reach the top
+    } else {
+      cur = 0;
+      const top = diffBody.getBoundingClientRect().top + 4;
+      for (let i = 0; i < diffFiles.length; i++) {
+        const el = diffBody.children[diffFiles[i].idx];
+        if (el && el.getBoundingClientRect().top <= top) cur = i; else break;
+      }
+    }
+    if (cur !== diffFileIdx) setActiveFile(cur);
+  });
+});
 
 $('#diff-close').addEventListener('click', closeDiff);
 $('#diff-backdrop').addEventListener('click', closeDiff);

@@ -67,6 +67,8 @@ const diffMeta = $('#diff-meta');
 const diffBody = $('#diff-body');
 const diffMerge = $('#diff-merge');
 const diffPr = $('#diff-pr');
+const diffFilesBar = $('#diff-files');
+const diffFileList = $('#diff-file-list');
 let diffSessionId = null;
 
 let seq = 0;

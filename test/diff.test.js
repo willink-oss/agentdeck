@@ -143,3 +143,76 @@ test('segmentsToHtml: matches the exact line structure paintDiff relies on', () 
   assert.ok(html.includes('<span class="dl-word">old</span>'));
   assert.ok(html.includes('<span class="dl-word">new</span>'));
 });
+
+const Syntax = require('../lib/syntax');
+const { parseFileHeader, fileIndex } = require('../lib/diff');
+
+test('parseFileHeader: plain and quoted b-side paths; non-headers -> null', () => {
+  assert.equal(parseFileHeader('diff --git a/src/app.js b/src/app.js'), 'src/app.js');
+  assert.equal(parseFileHeader('diff --git "a/sp ace.js" "b/sp ace.js"'), 'sp ace.js');
+  assert.equal(parseFileHeader('+++ b/src/app.js'), null);
+  assert.equal(parseFileHeader(null), null);
+});
+
+test('fileIndex: one jump point per file header, idx = segment index', () => {
+  const diff = [
+    'diff --git a/a.js b/a.js', '@@ -1 +1 @@', '-x', '+y',
+    'diff --git a/b.py b/b.py', '@@ -1 +1 @@', '-p', '+q',
+  ].join('\n');
+  const files = fileIndex(diffToSegments(diff, []));
+  assert.deepEqual(files, [{ path: 'a.js', idx: 0 }, { path: 'b.py', idx: 4 }]);
+  assert.deepEqual(fileIndex(diffToSegments('', [])), []);
+});
+
+test('segmentsToHtml + syntax: code lines get sx spans, headers/hunks do not', () => {
+  const diff = ['diff --git a/a.js b/a.js', '@@ -1 +1 @@', ' const keep = 1;', '+const port = 3000;'].join('\n');
+  const html = segmentsToHtml(diffToSegments(diff, []), Syntax);
+  assert.ok(html.includes('<span class="sx-kw">const</span>'), 'keyword coloured');
+  assert.ok(html.includes('<span class="sx-num">3000</span>'), 'number coloured');
+  // the file header contains "diff" and paths but must stay uncoloured
+  assert.ok(!/dl dl-file"><span class="sx-/.test(html), 'file header not tokenized');
+});
+
+test('segmentsToHtml + syntax: language follows the current file header', () => {
+  const diff = [
+    'diff --git a/a.js b/a.js', '@@ -1 +1 @@', '+const x = 1;',
+    'diff --git a/b.txt b/b.txt', '@@ -1 +1 @@', '+const looksLikeJs = 1;',
+  ].join('\n');
+  const html = segmentsToHtml(diffToSegments(diff, []), Syntax);
+  const perFile = html.split('dl dl-file');
+  assert.ok(perFile[1].includes('sx-kw'), 'js file is coloured');
+  assert.ok(!perFile[2].includes('sx-kw'), 'unknown-extension file stays plain');
+});
+
+test('segmentsToHtml + syntax: XSS — escaping holds on the syntax path too', () => {
+  const diff = ['diff --git a/a.js b/a.js', '@@ -1 +1 @@', '+const s = "<img src=x onerror=alert(1)>";'].join('\n');
+  const html = segmentsToHtml(diffToSegments(diff, []), Syntax);
+  assert.ok(!html.includes('<img'), 'raw tag must not survive tokenized output');
+  assert.ok(html.includes('&lt;img'), 'tag escaped inside the string token');
+});
+
+test('segmentsToHtml + syntax: word-diff overlay keeps .dl-word text and nests sx spans', () => {
+  const diff = ['diff --git a/a.js b/a.js', '@@ -1 +1 @@', '-const port = 3000;', '+const port = 8080;'].join('\n');
+  const html = segmentsToHtml(diffToSegments(diff, []), Syntax);
+  assert.ok(html.includes('<span class="dl-word"><span class="sx-num">8080</span></span>'),
+    'changed token: dl-word background wraps the sx colour span');
+  assert.ok(html.includes('<span class="sx-kw">const</span>'), 'unchanged token still coloured');
+});
+
+test('segmentsToHtml: omitting the syntax arg keeps the legacy output byte-identical', () => {
+  const diff = ['diff --git a/a.js b/a.js', '@@ -1 +1 @@', '-const a = 1;', '+const a = 2;'].join('\n');
+  const segs = diffToSegments(diff, []);
+  // pinned pre-syntax output: one block span per line, dl-word around changed tokens only
+  assert.equal(segmentsToHtml(segs),
+    '<span class="dl dl-file">diff --git a/a.js b/a.js</span>' +
+    '<span class="dl dl-hunk">@@ -1 +1 @@</span>' +
+    '<span class="dl dl-del">-const a = <span class="dl-word">1</span>;</span>' +
+    '<span class="dl dl-add">+const a = <span class="dl-word">2</span>;</span>');
+});
+
+test('segmentsToHtml + syntax: untracked file list is never tokenized', () => {
+  const diff = ['diff --git a/a.js b/a.js', '@@ -1 +1 @@', '+const a = 1;'].join('\n');
+  const html = segmentsToHtml(diffToSegments(diff, ['if-looks-like-code.js']), Syntax);
+  const untrackedPart = html.slice(html.indexOf('untracked'));
+  assert.ok(!untrackedPart.includes('sx-'), 'untracked names stay plain');
+});
