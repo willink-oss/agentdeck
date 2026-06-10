@@ -62,3 +62,11 @@ jobs:
       - name: Smoke (macOS / Windows)
         if: runner.os != 'Linux'
         run: npm run smoke
+      # Core-workflow E2E (worktree -> diff -> merge) against a real git repo.
+      # Exercises the per-OS bits the smoke can't: worktree paths and git behaviour.
+      - name: E2E flow (Linux — headless via xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm run e2e
+      - name: E2E flow (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: npm run e2e
