@@ -5,8 +5,8 @@ Agent Deck をパッケージマネージャ経由でインストールできる
 
 | ツール | 状態 | 資材 |
 |---|---|---|
-| **Homebrew Cask**（macOS） | ✅ 利用可（v0.1.0 の .dmg を参照） | `homebrew/agentdeck.rb` |
-| **winget**（Windows） | ⏳ **Windows ビルド待ち**（.exe リリース資産が無い） | `winget/iWillink.AgentDeck.*.yaml`（雛形） |
+| **Homebrew Cask**（macOS） | ✅ 利用可（v0.1.2 stable の .dmg を参照） | `homebrew/agentdeck.rb` |
+| **winget**（Windows） | ⏳ **マニフェスト提出待ち**（.exe は v0.1.2 で配布済み・提出は未了） | `winget/iWillink.AgentDeck.*.yaml`（雛形） |
 
 ---
 
