@@ -21,6 +21,7 @@
 6. **マルチリポジトリ管理** — サイドバーにリポを登録し、リポ単位で branch / diff-stat / worktree を表示。選択リポのセッションだけにステージを絞る**フォーカスフィルタ**、ダブルクリック即起動、PC全体で起動できる **⌂Home 常設エントリ**
 7. **diff からのマージ / PR** — worktree 隔離セッションの成果を、diff ドロワーから**ローカルマージ**（「merge ↩ base」＝`git merge --no-ff`）または **GitHub PR 作成**（「PR 作成」＝push → `gh pr create`）で取り込み
 8. **ステージ操作** — グリッドの列数切替（auto/1/2/3・永続化）、ペインのドラッグ並べ替え、起動中デッキの保存＆**再起動後に「↻ 前回のデッキを復元」**で再 spawn
+9. **エージェント・プリセット管理** — Agent 横の ⚙ から**カスタムプリセット（表示名＋起動コマンド）を追加・編集・削除**。Aider 等の任意 CLI をコード変更なしで登録でき、select と Quick launch チップに反映（localStorage 永続）
 
 ---
 
@@ -60,7 +61,9 @@ npm start
 npm test       # = node --test  （test/*.test.js を実行）
 ```
 
-CI（GitHub Actions）は ubuntu / macOS / windows のマトリクスで `node --test` を実行します。
+CI（GitHub Actions）は ubuntu / macOS / windows のマトリクスで `node --test` に加え、
+実ランナー上で Electron をヘッドレス起動するスモーク（`npm run smoke` — 起動 / preload /
+IPC / node-pty を検証。Linux は xvfb 経由）を実行します。
 
 ## ビルド・配布（macOS / arm64）
 
@@ -101,7 +104,7 @@ Windows `C:\Users\<Username>\AppData\Local\agy\bin`。
 
 | パス | 役割 |
 |---|---|
-| `.github/workflows/ci.yml` | OSマトリクスで `npm test` |
+| `.github/workflows/ci.yml` | OSマトリクスで `npm test` ＋ ヘッドレス起動スモーク（`npm run smoke`） |
 | `.github/pull_request_template.md` | PR テンプレート |
 | `.github/ISSUE_TEMPLATE/` | bug / feature テンプレート |
 | `LICENSE` | MIT（i-Willink）|
@@ -124,19 +127,17 @@ agentdeck/
 │   ├── repos.js         #   normalizePath / addRepo / findRepo / effectiveRepos / findEff
 │   ├── gitstat.js       #   parseNumstat / parseWorktreeList / formatStat
 │   ├── layout.js        #   normalizeLayoutMode / gridTemplateFor（グリッド列数）
-│   └── workspace.js     #   toConfig / normalize（デッキ保存/復元）
+│   ├── workspace.js     #   toConfig / normalize（デッキ保存/復元）
+│   ├── fuzzy.js         #   score（⌘K パレットの部分列マッチ）
+│   ├── version.js       #   compare / isNewer（アップデートチェック）
+│   └── presets.js       #   ビルトイン定義 + validate / keyFor / merge（プリセット管理）
 ├── renderer/            # サイドバー（マルチリポ）＋ターミナルグリッド＋diff ドロワー
 │   ├── index.html
 │   ├── renderer.js
 │   └── styles.css
-└── test/                # node --test 用ユニットテスト（63 cases）
-    ├── git-utils.test.js
-    ├── diff.test.js
-    ├── attention.test.js
-    ├── gitstat.test.js
-    ├── repos.test.js
-    ├── layout.test.js
-    └── workspace.test.js
+├── e2e/
+│   └── smoke.cjs        # CI 用ヘッドレス起動スモーク（3 OS・起動/preload/IPC/node-pty）
+└── test/                # node --test 用ユニットテスト（94 cases）
 ```
 
 ## 既知の割り切り
