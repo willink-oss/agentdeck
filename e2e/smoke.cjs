@@ -41,7 +41,11 @@ const fail = (msg) => { console.error('SMOKE FAIL:', msg); process.exitCode = 1;
 
   try {
     const win = await app.firstWindow({ timeout: TIMEOUT });
-    win.on('pageerror', (e) => console.error('renderer pageerror:', e && e.message));
+    // collect renderer errors and FAIL on them: with the renderer split across multiple
+    // classic <script>s, one file throwing no longer stops boot, so a green "#preset
+    // option" wait alone could mask a broken script — pageerror is the reliable signal.
+    const pageErrors = [];
+    win.on('pageerror', (e) => { pageErrors.push(e && e.message); console.error('renderer pageerror:', e && e.message); });
     await win.waitForLoadState('domcontentloaded');
 
     // 1) Renderer shell is present, and renderer.js executed (it builds #preset options at boot).
@@ -75,6 +79,7 @@ const fail = (msg) => { console.error('SMOKE FAIL:', msg); process.exitCode = 1;
     if (!pty.ok) fail('node-pty spawn failed: ' + pty.error);
     console.log('SMOKE: node-pty spawned a shell and streamed output');
 
+    if (pageErrors.length) fail(`renderer threw ${pageErrors.length} error(s): ${pageErrors.join(' | ')}`);
     console.log('SMOKE PASS');
   } finally {
     try { await app.close(); } catch (_) {}
