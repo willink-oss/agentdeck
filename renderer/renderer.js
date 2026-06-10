@@ -795,19 +795,8 @@ async function renderDiff(s) {
   paintDiff(res.diff, res.untracked);
 }
 function paintDiff(diff, untracked) {
-  const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const segs = window.GitDiff.diffToSegments(diff, untracked);
-  let html = '';
-  for (const seg of segs) {
-    if (seg.parts) {
-      // word-level: wrap changed tokens so they stand out within the +/- line
-      let inner = '';
-      for (const p of seg.parts) inner += p.changed ? `<span class="dl-word">${esc(p.text)}</span>` : esc(p.text);
-      html += `<span class="${seg.cls}">${inner || '&nbsp;'}</span>`;
-    } else {
-      html += `<span class="${seg.cls}">${esc(seg.text) || '&nbsp;'}</span>`;
-    }
-  }
+  // escaping + assembly live in lib/diff.js (segmentsToHtml) so CI covers the XSS path
+  const html = window.GitDiff.segmentsToHtml(window.GitDiff.diffToSegments(diff, untracked));
   diffBody.innerHTML = html || '<span class="dl">(no changes)</span>';
 }
 
@@ -935,19 +924,10 @@ function paletteContext(s) {
   return [repo ? repo.name : '', s.branch || '', preset ? preset.label : ''].filter(Boolean).join(' · ');
 }
 function rankSessions(query) {
-  const q = query.trim();
-  const out = [];
-  for (const [id, s] of sessions) {
-    const ns = Fuzzy.score(q, s.name);
-    const cs = Fuzzy.score(q, paletteContext(s));
-    // a name hit (+10) outranks a context-only hit; -Infinity means "no match on that field"
-    let sc = Math.max(ns != null ? ns + 10 : -Infinity, cs != null ? cs : -Infinity);
-    if (sc === -Infinity) continue;
-    if (s.attention) sc += 1000;                 // sessions waiting for input float to the top
-    out.push({ id, s, sc });
-  }
-  out.sort((a, b) => (b.sc - a.sc) || (b.s.lastData - a.s.lastData));
-  return out;
+  // scoring/ordering live in lib/fuzzy.js (rankSessions) so CI covers them
+  const entries = [...sessions].map(([id, s]) =>
+    ({ id, s, name: s.name, context: paletteContext(s), attention: s.attention, lastData: s.lastData }));
+  return Fuzzy.rankSessions(query, entries).map((r) => ({ id: r.entry.id, s: r.entry.s, sc: r.sc }));
 }
 function setPaletteSel(i) {
   if (i < 0 || i >= paletteResults.length) return;

@@ -1,0 +1,200 @@
+'use strict';
+/*
+ * E2E UI test — the interactive surfaces of the renderer, on a real runner.
+ *
+ * smoke proves the runtime boots and flow proves the git workflow; this covers
+ * the renderer's interaction layer — exactly the glue that a renderer refactor
+ * (module split, listener rewiring) is most likely to break:
+ *   keyboard shortcuts (⌘1-9 / ⌘[ ⌘] / ⌘Enter / ⌘W), the ⌘K palette,
+ *   inline rename, the repo focus-filter, the layout switch, the terminal
+ *   context menu, the diff-drawer open/close glue, the preset manager,
+ *   and the deck save/restore cycle across a reload.
+ *
+ * Run locally:
+ *   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm i --no-save playwright
+ *   npm run rebuild && node e2e/ui.cjs   # Linux: xvfb-run node e2e/ui.cjs
+ */
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
+const { execFileSync } = require('child_process');
+const { _electron: electron } = require('playwright');
+
+const ROOT = path.join(__dirname, '..');
+const TIMEOUT = 60000;
+setTimeout(() => { console.error('UI FAIL: global 5min deadline exceeded'); process.exit(1); }, 300000).unref();
+const ok = (cond, msg) => { if (!cond) throw new Error('UI FAIL: ' + msg); console.log('  ✓ ' + msg); };
+const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
+
+(async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'agentdeck-ui-'));
+  const repo = path.join(base, 'svc-a');
+  fs.mkdirSync(repo);
+  git(repo, 'init', '-b', 'main');
+  git(repo, 'config', 'user.email', 'e2e@agentdeck.test');
+  git(repo, 'config', 'user.name', 'agentdeck e2e');
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'hello\n');
+  git(repo, 'add', 'a.txt');
+  git(repo, 'commit', '-m', 'initial');
+
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentdeck-ui-ud-'));
+  const app = await electron.launch({
+    args: [path.join(ROOT, 'main.js'), `--user-data-dir=${userDataDir}`],
+    env: { ...process.env, AGENTDECK_UPDATE_FEED: 'https://127.0.0.1:9/none' },
+    timeout: TIMEOUT,
+  });
+
+  try {
+    const win = await app.firstWindow({ timeout: TIMEOUT });
+    win.on('dialog', (d) => d.accept());
+    win.on('pageerror', (e) => console.error('renderer pageerror:', e && e.message));
+    const booted = () => win.waitForFunction(() => document.querySelectorAll('#preset option').length > 0, null, { timeout: TIMEOUT });
+    await booted();
+
+    // -- setup: register the repo, launch "alpha" (repo) and "beta" (home) ----
+    await app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [dir] });
+    }, repo);
+    await win.click('#repo-add');
+    await win.waitForFunction(() =>
+      [...document.querySelectorAll('#repo-list .repo-name')].some((el) => el.textContent === 'svc-a'),
+      null, { timeout: TIMEOUT });
+
+    const launchShell = async (name, cwd) => {
+      await win.selectOption('#preset', 'shell');
+      await win.fill('#name', name);
+      await win.fill('#cwd', cwd);
+      await win.click('#launch');
+      await win.waitForFunction((n) =>
+        [...document.querySelectorAll('.pane.active .pane-name')].some((el) => el.textContent === n),
+        name, { timeout: TIMEOUT }); // serialise launches on the new pane becoming active
+    };
+    await launchShell('alpha', repo);
+    await launchShell('beta', os.homedir());
+    // registering the repo auto-selected it, so the home-launched beta is filter-hidden
+    // and the filter pill is showing — clear it for a both-visible baseline
+    ok(await win.evaluate(() => !document.querySelector('#stage-filter').hidden),
+      'setup: repo auto-select filters the home session (pill visible)');
+    await win.click('#stage-all');
+    await win.waitForFunction(() =>
+      [...document.querySelectorAll('.pane')].every((p) => p.style.display !== 'none'),
+      null, { timeout: 10000 });
+    ok(await win.evaluate(() => document.querySelectorAll('.pane').length) === 2, 'setup: two sessions running');
+
+    const activeName = () => win.evaluate(() =>
+      (document.querySelector('.pane.active .pane-name') || {}).textContent);
+
+    // -- keyboard shortcuts ----------------------------------------------------
+    await win.keyboard.press('Meta+1');
+    ok(await activeName() === 'alpha', '⌘1 focuses the first pane');
+    await win.keyboard.press('Meta+2');
+    ok(await activeName() === 'beta', '⌘2 focuses the second pane');
+    await win.keyboard.press('Meta+[');
+    ok(await activeName() === 'alpha', '⌘[ cycles back');
+    await win.keyboard.press('Meta+]');
+    ok(await activeName() === 'beta', '⌘] cycles forward');
+    await win.fill('#name', 'gamma');
+    await win.keyboard.press('Meta+Enter');
+    // the pane is appended synchronously but markActive lands after the spawn resolves
+    await win.waitForFunction(() =>
+      (document.querySelector('.pane.active .pane-name') || {}).textContent === 'gamma',
+      null, { timeout: TIMEOUT });
+    ok(await win.evaluate(() => document.querySelectorAll('.pane').length) === 3, '⌘Enter launches from the form');
+    await win.keyboard.press('Meta+w');
+    await win.waitForFunction(() => document.querySelectorAll('.pane').length === 2, null, { timeout: TIMEOUT });
+    ok(true, '⌘W kills the active pane');
+    await win.fill('#name', '');
+
+    // -- ⌘K palette --------------------------------------------------------------
+    await win.keyboard.press('Meta+k');
+    ok(await win.evaluate(() => !document.querySelector('#palette').hidden), '⌘K opens the palette');
+    await win.keyboard.type('alp');
+    await win.waitForFunction(() => {
+      const rows = document.querySelectorAll('#palette-list .palette-row');
+      return rows.length === 1 && rows[0].querySelector('.palette-name').textContent === 'alpha';
+    }, null, { timeout: 10000 });
+    ok(true, 'palette filters by fuzzy query');
+    await win.keyboard.press('Enter');
+    ok(await win.evaluate(() => document.querySelector('#palette').hidden), 'Enter commits and closes the palette');
+    ok(await activeName() === 'alpha', 'palette jump focuses the matched session');
+    await win.keyboard.press('Meta+k');
+    await win.keyboard.press('Escape');
+    ok(await win.evaluate(() => document.querySelector('#palette').hidden), 'Escape closes the palette');
+
+    // -- inline rename -----------------------------------------------------------
+    await win.dblclick('.pane .pane-name');
+    await win.keyboard.type('alpha-x');
+    await win.keyboard.press('Enter');
+    await win.waitForFunction(() =>
+      [...document.querySelectorAll('.pane .pane-name')].some((el) => el.textContent === 'alpha-x'),
+      null, { timeout: 10000 });
+    ok(await win.evaluate(() =>
+      [...document.querySelectorAll('#repo-list .repo-session-name')].some((el) => el.textContent === 'alpha-x')),
+      'rename reflects in the pane and the sidebar');
+
+    // -- repo focus-filter ---------------------------------------------------------
+    await win.click('#repo-list .repo-name');
+    await win.waitForFunction(() => {
+      const panes = [...document.querySelectorAll('.pane')];
+      const hidden = panes.filter((p) => p.style.display === 'none');
+      return hidden.length === 1 && !document.querySelector('#stage-filter').hidden;
+    }, null, { timeout: 10000 });
+    ok(true, 'selecting a repo filters the stage and shows the pill');
+    await win.click('#stage-all');
+    await win.waitForFunction(() =>
+      [...document.querySelectorAll('.pane')].every((p) => p.style.display !== 'none'),
+      null, { timeout: 10000 });
+    ok(true, '「すべて表示」 clears the filter');
+
+    // -- layout switch ----------------------------------------------------------
+    await win.click('.ls-btn[data-cols="2"]');
+    ok(await win.evaluate(() => document.querySelector('#grid').style.gridTemplateColumns.includes('repeat(2')),
+      'layout switch applies a 2-column grid');
+
+    // -- terminal context menu ----------------------------------------------------
+    await win.click('.pane .term-host', { button: 'right' });
+    ok(await win.evaluate(() => !document.querySelector('#term-menu').hidden), 'right-click opens the terminal menu');
+    await win.keyboard.press('Escape');
+    ok(await win.evaluate(() => document.querySelector('#term-menu').hidden), 'Escape closes the terminal menu');
+
+    // -- diff drawer open/close glue ----------------------------------------------
+    await win.keyboard.press('Meta+1'); // alpha-x (repo session)
+    await win.click('.pane .pane-diff');
+    await win.waitForFunction(() => !document.querySelector('#diff-overlay').hidden, null, { timeout: TIMEOUT });
+    ok(true, 'diff drawer opens for a repo session');
+    await win.keyboard.press('Escape');
+    ok(await win.evaluate(() => document.querySelector('#diff-overlay').hidden), 'Escape closes the diff drawer');
+
+    // -- preset manager (persisted custom preset) ----------------------------------
+    await win.click('#preset-manage');
+    await win.fill('#preset-label-input', 'Aider');
+    await win.fill('#preset-cmd-input', 'aider');
+    await win.click('#preset-submit');
+    ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 6, 'custom preset lands in the select');
+    await win.keyboard.press('Escape');
+
+    // -- reload: layout + presets persist; the saved deck restores -------------------
+    await win.reload();
+    await booted();
+    ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 6, 'reload: custom preset persisted');
+    ok(await win.evaluate(() => document.querySelector('#grid').style.gridTemplateColumns.includes('repeat(2')),
+      'reload: layout choice persisted');
+    await win.waitForFunction(() => {
+      const b = document.querySelector('#restore-deck');
+      return b && !b.hidden && b.textContent.includes('(2)');
+    }, null, { timeout: TIMEOUT });
+    await win.click('#restore-deck');
+    await win.waitForFunction(() => document.querySelectorAll('.pane').length === 2, null, { timeout: TIMEOUT });
+    const names = await win.evaluate(() => [...document.querySelectorAll('.pane .pane-name')].map((el) => el.textContent));
+    ok(names.includes('alpha-x') && names.includes('beta'), `restore: deck re-spawned with kept names (${names.join(',')})`);
+
+    console.log('UI PASS');
+  } finally {
+    try { await app.close(); } catch (_) {}
+    try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_) {}
+    try { fs.rmSync(base, { recursive: true, force: true }); } catch (_) {}
+  }
+})().catch((err) => {
+  console.error(err && err.stack ? err.stack : err);
+  process.exitCode = process.exitCode || 1;
+});

@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyLine, diffToSegments, wordDiff } = require('../lib/diff');
+const { classifyLine, diffToSegments, wordDiff, escapeHtml, segmentsToHtml } = require('../lib/diff');
 
 test('classifyLine: file headers', () => {
   assert.equal(classifyLine('diff --git a/x b/x'), 'dl dl-file');
@@ -108,4 +108,38 @@ test('diffToSegments: very long -/+ lines skip word-diff (O(n*m) guard)', () => 
   const long = 'x'.repeat(1600);
   const segs = diffToSegments(['@@ -1 +1 @@', '-' + long, '+' + long + 'y'].join('\n'), []);
   assert.ok(segs.filter((s) => s.cls === 'dl dl-del' || s.cls === 'dl dl-add').every((s) => !s.parts));
+});
+
+test('escapeHtml: neutralises &, <, > and tolerates null', () => {
+  assert.equal(escapeHtml('<script>a && b</script>'), '&lt;script&gt;a &amp;&amp; b&lt;/script&gt;');
+  assert.equal(escapeHtml(null), '');
+});
+
+test('segmentsToHtml: escapes diff text (XSS via committed code)', () => {
+  const html = segmentsToHtml(diffToSegments('+<img src=x onerror=alert(1)>', []));
+  assert.ok(!html.includes('<img'), 'raw tag must not survive');
+  assert.ok(html.includes('&lt;img'), 'tag is escaped as text');
+});
+
+test('segmentsToHtml: escapes word-level parts and untracked filenames too', () => {
+  const segs = diffToSegments(['@@ -1 +1 @@', '-a <b>', '+a <i>'].join('\n'), ['<svg onload=x>.js']);
+  const html = segmentsToHtml(segs);
+  assert.ok(!/<b>|<i>|<svg/.test(html), 'no user-controlled tags survive anywhere');
+  assert.ok(html.includes('<span class="dl-word">'), 'word-level wrapping still applied');
+});
+
+test('segmentsToHtml: blank lines render &nbsp;, empty/no input renders empty string', () => {
+  const html = segmentsToHtml([{ cls: 'dl', text: '' }]);
+  assert.equal(html, '<span class="dl">&nbsp;</span>');
+  assert.equal(segmentsToHtml([]), '');
+  assert.equal(segmentsToHtml(null), '');
+});
+
+test('segmentsToHtml: matches the exact line structure paintDiff relies on', () => {
+  const html = segmentsToHtml(diffToSegments(['@@ -1 +1 @@', '-old', '+new'].join('\n'), []));
+  // one <span> per line, class preserved verbatim, parts-lines wrap only changed tokens
+  assert.equal((html.match(/<span class="dl dl-del">/g) || []).length, 1);
+  assert.equal((html.match(/<span class="dl dl-add">/g) || []).length, 1);
+  assert.ok(html.includes('<span class="dl-word">old</span>'));
+  assert.ok(html.includes('<span class="dl-word">new</span>'));
 });
