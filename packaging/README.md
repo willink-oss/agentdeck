@@ -25,18 +25,16 @@ brew install --cask willink-oss/tap/agentdeck
 > 未署名のため初回起動でブロックされたら、cask の caveats に出る手順
 > （`xattr -dr com.apple.quarantine "/Applications/Agent Deck.app"` か 右クリック→開く）で開く。
 
-### 新バージョンを出すたびに（cask を更新 → tap へ同期）
+### 新バージョンの反映（自動）
 
-```bash
-# Releases に上がった .dmg の sha256 を取得（リリース実体から）
-gh release download vX.Y.Z -p '*.dmg' -D /tmp/dl && shasum -a 256 /tmp/dl/*.dmg
-# packaging/homebrew/agentdeck.rb の version と sha256 を更新してコミット
-# → tap リポの Casks/agentdeck.rb にコピーして push
-brew audit --cask --online willink-oss/tap/agentdeck   # url 到達性 + sha256 を検証
-```
+tap リポの **`update-cask.yml`** が 6 時間毎に `releases/latest` を見て
+version / sha256（リリース資産の digest）を自動更新する。**手動同期は不要**。
+即時反映したい場合: `gh workflow run update-cask.yml --repo willink-oss/homebrew-tap`
 
-> ⚠️ cask が **pre-release を指すと `brew audit` が警告**する（インストール自体は可）。
-> リリースは **正式版（pre-release を外す）**にしておくと audit がクリーン。
+- `releases/latest` はプレリリースを返さないため、ベータ版が cask に流れることはない
+- 本リポの `packaging/homebrew/agentdeck.rb` は**構造のテンプレート**（caveats / zap 等を
+  変える時はここを編集して tap へ反映）。version/sha256 は tap 側が正本
+- 検証: `brew audit --cask --online willink-oss/tap/agentdeck`（url 到達性 + sha256）
 
 ---
 

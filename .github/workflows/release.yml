@@ -2,6 +2,18 @@ name: Release
 
 # Build per-OS installers on a version tag and attach them to that GitHub Release.
 # Native deps (node-pty) can only be built on their target OS, hence the matrix.
+#
+# Pipeline: prepare (create ONE draft) -> build x3 (attach installers) -> publish
+# (flip the draft live atomically). The release stays a draft until every
+# installer is attached, so `releases/latest` — read by the in-app updater, the
+# Homebrew tap's auto-updater, and the website's link updater — never sees a
+# half-uploaded release. The draft is created once up front because draft
+# releases have no tag uniqueness: three matrix jobs racing to create one can
+# produce duplicates.
+#
+# Tag conventions:
+#   vX.Y.Z        -> stable: published as latest; brew/site auto-follow, winget via PR
+#   vX.Y.Z-beta.N -> pre-release: published flagged; ignored by every channel
 on:
   push:
     tags: ['v*']
@@ -10,8 +22,26 @@ permissions:
   contents: write
 
 jobs:
+  prepare:
+    name: create draft release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create the draft (idempotent for re-runs)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release for $TAG already exists — re-run, leaving it as is"
+            exit 0
+          fi
+          args=(--draft --generate-notes --title "$TAG")
+          [[ "$TAG" == *-* ]] && args+=(--prerelease)
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" "${args[@]}"
+
   build:
     name: build (${{ matrix.os }})
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -32,12 +62,28 @@ jobs:
         run: npm ci
       - name: Build installers
         run: ${{ matrix.build }}
-      - name: Attach installers to the release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            dist/*.dmg
-            dist/*.exe
-            dist/*.AppImage
-            dist/*.deb
+      - name: Attach installers to the draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          shopt -s nullglob
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            dist/*.dmg dist/*.exe dist/*.AppImage dist/*.deb
+
+  publish:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Flip the completed draft live
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$TAG" == *-* ]]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          else
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          fi
