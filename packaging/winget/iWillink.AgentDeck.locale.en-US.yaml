@@ -1,6 +1,6 @@
-# winget default-locale manifest — TEMPLATE (see installer.yaml for the blocker note).
+# winget default-locale manifest — v0.1.2 (submission steps in installer.yaml / packaging/README.md).
 PackageIdentifier: iWillink.AgentDeck
-PackageVersion: "<VERSION>"
+PackageVersion: "0.1.2"
 PackageLocale: en-US
 Publisher: i-Willink LLC
 PublisherUrl: https://github.com/willink-oss

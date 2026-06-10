@@ -1,14 +1,14 @@
-# winget installer manifest — TEMPLATE。
-# ⚠ Windows ビルド（electron-builder の nsis ターゲット）と .exe リリース資産が出るまで提出不可。
-# <…> プレースホルダを実値に置換してから microsoft/winget-pkgs へ PR する。
+# winget installer manifest — v0.1.2（実値）。
+# 提出: microsoft/winget-pkgs の manifests/i/iWillink/AgentDeck/0.1.2/ へ PR（packaging/README.md 参照）。
+# 検証: winget validate --manifest packaging/winget / winget install --manifest packaging/winget
 PackageIdentifier: iWillink.AgentDeck
-PackageVersion: "<VERSION>"          # 例: 0.1.0（package.json version / Git タグ vX.Y.Z と一致）
+PackageVersion: "0.1.2"
 InstallerType: nullsoft               # electron-builder の nsis インストーラ
 Scope: user
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/willink-oss/agentdeck/releases/download/v<VERSION>/Agent.Deck.Setup.<VERSION>.exe
-    InstallerSha256: "<SHA256_OF_EXE>"
+    InstallerUrl: https://github.com/willink-oss/agentdeck/releases/download/v0.1.2/Agent.Deck.Setup.0.1.2.exe
+    InstallerSha256: "22486B137CDF081A6D22A49E836804CF1B7197D8880A95A6587F7BA1B11096C3"
   # arm64 Windows を出すなら下を有効化:
   # - Architecture: arm64
   #   InstallerUrl: https://github.com/willink-oss/agentdeck/releases/download/v<VERSION>/Agent.Deck.Setup.<VERSION>-arm64.exe
