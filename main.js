@@ -162,8 +162,16 @@ ipcMain.handle('pty:spawn', async (event, opts) => {
 
   ptys.set(id, proc);
   const sender = event.sender;
-  proc.onData((data) => sender.send('pty:data', { id, data }));
-  proc.onExit(({ exitCode }) => { sender.send('pty:exit', { id, exitCode }); ptys.delete(id); });
+  // Guard every send: pty events arrive asynchronously, so a shell's final output /
+  // exit can land AFTER the webContents died (closing the window kills the ptys in
+  // window-all-closed, but their exit events fire a tick later; a renderer reload
+  // orphans old sessions the same way). An unguarded send then throws
+  // "Object has been destroyed" as an uncaught exception in the main process.
+  proc.onData((data) => { if (!sender.isDestroyed()) sender.send('pty:data', { id, data }); });
+  proc.onExit(({ exitCode }) => {
+    if (!sender.isDestroyed()) sender.send('pty:exit', { id, exitCode });
+    ptys.delete(id);
+  });
 
   if (startupCommand && startupCommand.trim()) {
     setTimeout(() => { const live = ptys.get(id); if (live) live.write(startupCommand + '\r'); }, 700);
