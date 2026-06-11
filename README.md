@@ -33,7 +33,7 @@
 
 | OS | ファイル | 初回起動 |
 |---|---|---|
-| **macOS** (Apple Silicon / arm64) | `.dmg` | Gatekeeper 警告 → **右クリック → 開く**（または `xattr -dr com.apple.quarantine`） |
+| **macOS** (Apple Silicon `-arm64` / Intel `-x64`) | `.dmg` | Gatekeeper 警告 → **右クリック → 開く**（または `xattr -dr com.apple.quarantine`） |
 | **Windows** (x64) | `.exe`（インストーラ） | SmartScreen → **詳細情報 → 実行** |
 | **Linux** (x64) | `.AppImage` / `.deb` | AppImage は `chmod +x` で実行（要 `libfuse2`）／deb は `apt install ./…deb` |
 
@@ -66,7 +66,7 @@ CI（GitHub Actions）は ubuntu / macOS / windows のマトリクスで `node -
 実ランナー上で Electron をヘッドレス起動するスモーク（`npm run smoke` — 起動 / preload /
 IPC / node-pty を検証。Linux は xvfb 経由）を実行します。
 
-## ビルド・配布（macOS / arm64）
+## ビルド・配布（macOS / arm64 + x64）
 
 `electron-builder` で **.dmg** を生成します（node-pty は asar 外に展開して同梱）。
 **現在のリリースは未署名**で、GitHub Releases を正本に配布します。

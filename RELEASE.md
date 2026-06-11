@@ -6,7 +6,7 @@ Agent Deck は **electron-builder** でパッケージし、**GitHub Releases** 
 
 | OS | 成果物 | 署名 |
 |---|---|---|
-| macOS (arm64) | `.dmg` | **未署名**（`pack:unsigned`） |
+| macOS (arm64 / x64) | `.dmg` ×2（`-arm64` / `-x64`） | **未署名**（`pack:unsigned`） |
 | Windows (x64) | `.exe`（NSIS インストーラ） | 未署名 |
 | Linux (x64) | `.AppImage` / `.deb` | 未署名 |
 
