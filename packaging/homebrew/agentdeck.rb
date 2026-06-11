@@ -14,7 +14,7 @@ cask "agentdeck" do
   homepage "https://github.com/willink-oss/agentdeck"
 
   # 未署名配布（署名・公証なし）
-  depends_on macos: :big_sur
+  depends_on macos: :monterey
 
   app "Agent Deck.app"
 
