@@ -32,7 +32,7 @@ function chordKey(e) {
   if (k === ']') return 'BracketRight';
   if (k === 'Enter') return 'Enter';
   const u = typeof k === 'string' ? k.toUpperCase() : '';
-  if (u === 'W' || u === 'K' || u === 'C' || u === 'A') return 'Key' + u;
+  if (u === 'W' || u === 'K' || u === 'C' || u === 'A' || u === 'F') return 'Key' + u;
   return '';
 }
 // Capture phase: with a terminal focused, xterm handles some Ctrl+Shift combos
@@ -63,13 +63,50 @@ window.addEventListener('keydown', (e) => {
   } else if (code === 'KeyA') {
     const s = focusedSession();
     if (s) { e.preventDefault(); e.stopPropagation(); s.term.selectAll(); }
+  } else if (code === 'KeyF') {
+    if (activeSessionId && sessions.has(activeSessionId)) { e.preventDefault(); e.stopPropagation(); openTermSearch(); }
   }
 }, true);
 // the static hint markup is written for macOS; relabel for the Ctrl+Shift chord
 if (!IS_MAC) {
   const kbdHint = document.querySelector('.kbd-hint');
-  if (kbdHint) kbdHint.textContent = 'Ctrl+Shift+K 検索 · Ctrl+Shift+1–9 ペイン · Ctrl+Shift+[ ] 移動 · Ctrl+Shift+Enter 起動 · Ctrl+Shift+W 終了';
+  if (kbdHint) kbdHint.textContent = 'Ctrl+Shift+K 検索 · Ctrl+Shift+F 端末内検索 · Ctrl+Shift+1–9 ペイン · Ctrl+Shift+[ ] 移動 · Ctrl+Shift+Enter 起動 · Ctrl+Shift+W 終了';
 }
+// ---- in-terminal search (chord+F): find within the active session's scrollback ----
+const termSearchEl = $('#term-search');
+const termSearchInput = $('#term-search-input');
+let searchSessionId = null;
+function openTermSearch() {
+  searchSessionId = activeSessionId;
+  termSearchEl.hidden = false;
+  termSearchInput.focus();
+  termSearchInput.select();
+}
+function closeTermSearch() {
+  termSearchEl.hidden = true;
+  const s = sessions.get(searchSessionId);
+  searchSessionId = null;
+  if (s) { try { s.term.clearSelection(); s.term.focus(); } catch (_) {} }
+}
+function termSearchStep(forward, incremental) {
+  const s = sessions.get(searchSessionId);
+  const q = termSearchInput.value;
+  if (!s || !s.search || !q) return;
+  try {
+    if (forward) s.search.findNext(q, { incremental: !!incremental });
+    else s.search.findPrevious(q);
+  } catch (_) {}
+}
+termSearchInput.addEventListener('input', () => termSearchStep(true, true));
+termSearchInput.addEventListener('keydown', (e) => {
+  e.stopPropagation(); // keep typing away from the global chord handler
+  if (e.key === 'Enter') { e.preventDefault(); termSearchStep(!e.shiftKey, false); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeTermSearch(); }
+});
+$('#term-search-next').addEventListener('click', () => termSearchStep(true, false));
+$('#term-search-prev').addEventListener('click', () => termSearchStep(false, false));
+$('#term-search-close').addEventListener('click', closeTermSearch);
+
 /** The session whose terminal currently holds keyboard focus, or null. */
 function focusedSession() {
   const ae = document.activeElement;

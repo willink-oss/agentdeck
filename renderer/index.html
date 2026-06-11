@@ -74,7 +74,7 @@
         </div>
 
         <button type="submit" id="launch">&#9654; Launch agent</button>
-        <div class="kbd-hint">&#8984;K 検索 &middot; &#8984;1&ndash;9 ペイン &middot; &#8984;[ &#8984;] 移動 &middot; &#8984;&crarr; 起動 &middot; &#8984;W 終了</div>
+        <div class="kbd-hint">&#8984;K 検索 &middot; &#8984;F 端末内検索 &middot; &#8984;1&ndash;9 ペイン &middot; &#8984;[ &#8984;] 移動 &middot; &#8984;&crarr; 起動 &middot; &#8984;W 終了</div>
       </form>
 
       <div class="quick">
@@ -175,6 +175,13 @@
     </div>
   </div>
 
+  <div id="term-search" class="term-search" hidden>
+    <input id="term-search-input" type="text" spellcheck="false" placeholder="ターミナル内を検索…" />
+    <button type="button" id="term-search-prev" class="ghost-btn" title="前へ (Shift+Enter)">↑</button>
+    <button type="button" id="term-search-next" class="ghost-btn" title="次へ (Enter)">↓</button>
+    <button type="button" id="term-search-close" class="ghost-btn" title="閉じる (Esc)">×</button>
+  </div>
+
   <div id="term-menu" class="term-menu" hidden>
     <button type="button" data-act="copy">コピー</button>
     <button type="button" data-act="paste">ペースト</button>
@@ -191,6 +198,7 @@
 
   <script src="../node_modules/xterm/lib/xterm.js"></script>
   <script src="../node_modules/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+  <script src="../node_modules/xterm-addon-search/lib/xterm-addon-search.js"></script>
   <script src="../lib/diff.js"></script>
   <script src="../lib/attention.js"></script>
   <script src="../lib/repos.js"></script>

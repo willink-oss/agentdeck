@@ -51,6 +51,8 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   });
   const fit = new FitAddonCtor();
   term.loadAddon(fit);
+  const search = new ((window.SearchAddon && window.SearchAddon.SearchAddon) || window.SearchAddon)();
+  term.loadAddon(search);
   term.open(termHost);
   requestAnimationFrame(() => { try { fit.fit(); } catch (_) {} });
   term.onData((d) => window.deck.input(id, d));
@@ -61,7 +63,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   ro.observe(termHost);
 
   const s = {
-    id, term, fit, el: pane, ro, name: displayName,
+    id, term, fit, search, el: pane, ro, name: displayName,
     alive: true, hasOutput: false, attention: false, lastData: Date.now(),
     gitCwd: null, baseSha: null, branch: null, gitRoot: null, worktreePath: null,
     repoId: repoIdForCwd(workdir), launchCwd: workdir,

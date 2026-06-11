@@ -144,6 +144,23 @@ async function closeHard(app) {
     }, null, { timeout: 10000 });
     ok(true, 'focusing the session clears attention');
 
+    // -- in-terminal search (chord+F) ---------------------------------------------
+    await win.evaluate(() => window.deck.input(document.querySelector('.pane.active').dataset.id, 'echo find-me-target\r'));
+    await win.waitForFunction(() => {
+      const s = sessions.get(document.querySelector('.pane.active').dataset.id);
+      return s && termTailLines(s.term, 6).join('\n').includes('find-me-target');
+    }, null, { timeout: 15000 });
+    await win.keyboard.press(`${MOD}+KeyF`);
+    ok(await win.evaluate(() => !document.querySelector('#term-search').hidden), 'chord+F opens the search bar');
+    await win.fill('#term-search-input', 'find-me');
+    await win.keyboard.press('Enter');
+    await win.waitForFunction(() =>
+      [...sessions.values()].some((s) => (s.term.getSelection() || '').includes('find-me')),
+      null, { timeout: 10000 });
+    ok(true, 'search selects the match in the terminal');
+    await win.keyboard.press('Escape');
+    ok(await win.evaluate(() => document.querySelector('#term-search').hidden), 'Escape closes the search bar');
+
     // -- ⌘K palette --------------------------------------------------------------
     await win.keyboard.press(`${MOD}+KeyK`);
     ok(await win.evaluate(() => !document.querySelector('#palette').hidden), '⌘K opens the palette');
