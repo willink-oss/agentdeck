@@ -87,3 +87,24 @@ jobs:
           else
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
           fi
+
+  # Auto-submit the new version to microsoft/winget-pkgs. Skips quietly until the
+  # WINGET_TOKEN secret (PAT with public_repo, used for the fork + PR) is set, and
+  # requires the initial package (manual PR) to already exist in winget-pkgs.
+  winget:
+    name: submit to winget
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }} # stable releases only
+    runs-on: windows-latest
+    steps:
+      - name: Submit the version via wingetcreate
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if (-not $env:WINGET_TOKEN) { Write-Host "WINGET_TOKEN not set - skipping winget submission"; exit 0 }
+          $ver = $env:TAG.TrimStart('v')
+          $url = "https://github.com/willink-oss/agentdeck/releases/download/$($env:TAG)/Agent.Deck.Setup.$ver.exe"
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe update iWillink.AgentDeck --urls $url --version $ver --submit --token $env:WINGET_TOKEN
