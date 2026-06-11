@@ -181,11 +181,32 @@ function notify(name) {
   } catch (_) {}
 }
 
+/** Last few buffer rows up to the cursor (wrapped rows included), for idle classification. */
+function termTailLines(term, n) {
+  try {
+    const buf = term.buffer.active;
+    const end = buf.baseY + buf.cursorY;
+    const out = [];
+    for (let y = Math.max(0, end - n + 1); y <= end; y++) {
+      const line = buf.getLine(y);
+      if (line) out.push(line.translateToString(true));
+    }
+    return out;
+  } catch (_) { return []; }
+}
+
+const MIN_IDLE_MS = Math.min(...Object.values(window.Attention.THRESHOLDS_MS));
 setInterval(() => {
   const now = Date.now();
   for (const [id, s] of sessions) {
     const watching = windowFocused && activeSessionId === id;
-    if (window.Attention.shouldFlagAttention({ ...s, watching }, now, ATTENTION_IDLE_MS)) {
+    // cheap guards first — only read the terminal buffer once a flag is possible
+    if (!s.alive || !s.hasOutput || s.attention || watching) continue;
+    if (now - s.lastData <= MIN_IDLE_MS) continue;
+    // silence alone can't tell "waiting" from "thinking": classify the terminal
+    // tail (prompt / question / working / plain) and let the kind pick the cutoff
+    const kind = window.Attention.classifyTail(termTailLines(s.term, 4));
+    if (window.Attention.shouldFlagAttention({ ...s, watching }, now, kind)) {
       setAttention(s, id);
     }
   }

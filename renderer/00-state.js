@@ -24,7 +24,7 @@ const TERM_THEME = {
   brightCyan: '#56b6c2', brightWhite: '#e6e8ee',
 };
 
-const ATTENTION_IDLE_MS = 6000; // 出力が止まってこの時間で「入力待ち」とみなす
+// 入力待ち判定の閾値は lib/attention.js の THRESHOLDS_MS（末尾分類ごとに可変）
 
 /** @type {Map<string, object>} */
 const sessions = new Map();

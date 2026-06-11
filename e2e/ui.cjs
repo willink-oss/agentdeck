@@ -120,6 +120,30 @@ async function closeHard(app) {
     ok(true, '⌘W kills the active pane');
     await win.fill('#name', '');
 
+    // -- attention detection: an idle shell prompt flags fast --------------------
+    // focus beta so alpha is unwatched; its tail is a shell prompt (zsh % / bash $ /
+    // PowerShell >) -> classified 'prompt'; the 15s wait covers any kind's cutoff
+    await win.keyboard.press(`${MOD}+Digit2`);
+    // pin the precondition (beta watched, alpha unwatched) so a timeout below can
+    // only mean the detector itself didn't fire
+    await win.waitForFunction(() =>
+      (document.querySelector('.pane.active .pane-name') || {}).textContent === 'beta',
+      null, { timeout: 10000 });
+    await win.waitForFunction(() => {
+      const panes = [...document.querySelectorAll('.pane')];
+      const alpha = panes.find((p) => p.querySelector('.pane-name').textContent === 'alpha');
+      return alpha && alpha.querySelector('.status-dot.waiting');
+    }, null, { timeout: 25000 });
+    ok(true, 'idle prompt flags attention (waiting dot)');
+    // focusing the session clears the flag
+    await win.keyboard.press(`${MOD}+Digit1`);
+    await win.waitForFunction(() => {
+      const panes = [...document.querySelectorAll('.pane')];
+      const alpha = panes.find((p) => p.querySelector('.pane-name').textContent === 'alpha');
+      return alpha && !alpha.querySelector('.status-dot.waiting');
+    }, null, { timeout: 10000 });
+    ok(true, 'focusing the session clears attention');
+
     // -- ⌘K palette --------------------------------------------------------------
     await win.keyboard.press(`${MOD}+KeyK`);
     ok(await win.evaluate(() => !document.querySelector('#palette').hidden), '⌘K opens the palette');
