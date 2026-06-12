@@ -157,4 +157,7 @@ window.addEventListener('keydown', (e) => {
   }
   // trigger the initial update check now that the onUpdateAvailable listener is registered
   try { window.deck.checkUpdate().catch(() => {}); } catch (_) {}
+  // repos are loaded and the schedule:fire handler (08) is registered — tell main
+  // it may deliver scheduled launches (it queues window creation on this signal)
+  try { window.deck.scheduleReady(); } catch (_) {}
 })();

@@ -58,6 +58,7 @@ async function removeRepoFromList(id) {
   if (activeRepoId === id) activeRepoId = null;
   retagSessions();
   if (res && res.ok === false) flashRepoMsg('リポジトリの保存に失敗しました: ' + (res.error || ''));
+  else disableSchedulesForRepo(id); // FR-10: schedules pointing here go dormant, not lost
   renderRepos();
 }
 /** Poll/refresh git status (branch + diff stats + worktrees); re-render only on change.
@@ -239,6 +240,14 @@ function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees,
     c.textContent = String(sessList.length);
     row.appendChild(c);
     repoBadgeEls.set(key, c);
+  }
+  if (repoId) {
+    const sc = document.createElement('button');
+    sc.className = 'repo-sched';
+    sc.textContent = '⏰';
+    sc.title = 'このリポジトリでスケジュール起動を追加';
+    sc.addEventListener('click', (e) => { e.stopPropagation(); openScheduleManagerForRepo(repoId); });
+    row.appendChild(sc);
   }
   if (repoId && !home) {
     const rm = document.createElement('button');

@@ -23,6 +23,7 @@
 8. **ステージ操作** — グリッドの列数切替（auto/1/2/3・永続化）、ペインのドラッグ並べ替え、起動中デッキの保存＆**再起動後に「↻ 前回のデッキを復元」**で再 spawn
 9. **エージェント・プリセット管理** — Agent 横の ⚙ から**カスタムプリセット（表示名＋起動コマンド）を追加・編集・削除**。Aider 等の任意 CLI をコード変更なしで登録でき、select と Quick launch チップに反映（localStorage 永続）
 10. **キーボード操作** — ペイン移動（1–9）・前後循環（[ ]）・クイック起動（Enter）・終了（W）・**コマンドパレット（K・fuzzy 検索でセッションへジャンプ）**。修飾キーは macOS が **⌘**、Windows / Linux が **Ctrl+Shift**（素の Ctrl はシェル/readline のキーのため、ターミナルアプリの慣習に準拠）
+11. **スケジュール起動（⏰）** — 「リポジトリ × エージェント × 時刻」を登録すると指定時刻にセッションを自動起動。繰り返し（一回のみ / 毎日 / 曜日指定）、worktree 隔離（発火ごとに日時付きブランチで一意化）、有効/無効トグル・次回発火表示・起動時の OS 通知に対応。Agent 横の ⏰ かリポジトリ行の ⏰ から登録（`userData/schedules.json` に永続化、スケジューラは main プロセス常駐で 30 秒間隔の壁時計照合 — スリープ復帰でも取りこぼし/二重発火なし）
 
 ---
 
@@ -119,7 +120,7 @@ Windows `C:\Users\<Username>\AppData\Local\agy\bin`。
 
 ```
 agentdeck/
-├── main.js              # Electron main：PTY・git worktree/diff/merge・リポ登録・IPC
+├── main.js              # Electron main：PTY・git worktree/diff/merge・リポ登録・スケジューラ・IPC
 ├── preload.js           # contextBridge 経由の IPC
 ├── lib/                 # DOM/Electron 非依存の純粋ロジック（テスト対象）
 │   ├── git-utils.js     #   defaultShell / sanitizeBranch / worktreeFolderName
@@ -131,9 +132,10 @@ agentdeck/
 │   ├── workspace.js     #   toConfig / normalize（デッキ保存/復元）
 │   ├── fuzzy.js         #   score（⌘K パレットの部分列マッチ）
 │   ├── version.js       #   compare / isNewer（アップデートチェック）
-│   └── presets.js       #   ビルトイン定義 + validate / keyFor / merge（プリセット管理）
+│   ├── presets.js       #   ビルトイン定義 + validate / keyFor / merge（プリセット管理）
+│   └── schedule.js      #   validate / nextFireAt / shouldFire / markFired（スケジュール起動）
 ├── renderer/            # UI（順序ロードの classic script 群 — global lexical scope を共有）
-│   ├── index.html       #   script の並び順がロード順（boot を含む 07 が必ず最後）
+│   ├── index.html       #   script の並び順がロード順（boot を含む 07 → 08 の順を維持）
 │   ├── 00-state.js      #   共有状態・定数・DOM refs・lib バインディング
 │   ├── 01-launch-form.js#   起動フォーム（preset select / quick chips）
 │   ├── 02-repos.js      #   リポジトリパネル（サイドバー・ポーリング・フィルタ）
@@ -142,6 +144,7 @@ agentdeck/
 │   ├── 05-diff.js       #   diff ドロワー（merge / PR）
 │   ├── 06-keys-palette.js #  ⌘ショートカット・リネーム・⌘K パレット
 │   ├── 07-overlays-boot.js # プリセット管理・右クリックメニュー・update toast・boot
+│   ├── 08-schedules.js  #   スケジュール起動（⏰ モーダル・schedule:fire ハンドラ）
 │   └── styles.css
 ├── e2e/
 │   └── smoke.cjs        # CI 用ヘッドレス起動スモーク（3 OS・起動/preload/IPC/node-pty）
@@ -156,6 +159,7 @@ agentdeck/
 - merge はローカル `git merge --no-ff` のみ（**コミット済み履歴**が対象。未コミット分はセッション内で commit してから）。コンフリクト時は `git merge --abort` で原状復帰。
 - PR 作成は **`origin` リモート＋認証済み `gh` CLI** が前提（push → `gh pr create`）。worktree 隔離セッションのみ対象。
 - デッキ復元は各セッションの**起動設定を再 spawn** するもの（ライブ端末出力・スクロールバックは復元しない）。worktree セッションは既存の worktree ディレクトリでシェルを開き直す。
+- スケジュール起動は**アプリ起動中のみ**発火する（OS のタスクスケジューラには登録しない）。非起動中に過ぎた回はスキップされるが、「一回のみ」は起動時に**直近 5 分以内なら猶予発火**する。精度は ±30 秒。
 
 ## 次の一手（任意）
 

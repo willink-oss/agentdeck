@@ -40,6 +40,7 @@
         <label class="field">
           <span class="field-label">Agent
             <button type="button" id="preset-manage" class="preset-manage" title="プリセットを管理">&#9881;</button>
+            <button type="button" id="sched-manage" class="preset-manage" title="スケジュール起動を管理">&#9200;</button>
           </span>
           <select id="preset"></select>
         </label>
@@ -175,6 +176,57 @@
     </div>
   </div>
 
+  <div id="sched-overlay" class="preset-overlay" hidden>
+    <div class="preset-backdrop" id="sched-backdrop"></div>
+    <div class="preset-panel">
+      <div class="preset-head">
+        <span class="preset-title">&#9200; スケジュール起動</span>
+        <button type="button" id="sched-close" class="ghost-btn">close</button>
+      </div>
+      <ul id="sched-list" class="preset-list"></ul>
+      <form id="sched-form" autocomplete="off">
+        <div class="sched-form-row">
+          <select id="sched-repo" title="リポジトリ"></select>
+          <input id="sched-time" type="time" required title="起動時刻" />
+          <select id="sched-repeat" title="繰り返し">
+            <option value="daily">毎日</option>
+            <option value="weekly">曜日指定</option>
+            <option value="once">一回のみ</option>
+          </select>
+          <input id="sched-date" type="date" title="日付（一回のみ）" hidden />
+        </div>
+        <div id="sched-days" class="sched-days" hidden>
+          <button type="button" class="day-chip" data-day="1">月</button>
+          <button type="button" class="day-chip" data-day="2">火</button>
+          <button type="button" class="day-chip" data-day="3">水</button>
+          <button type="button" class="day-chip" data-day="4">木</button>
+          <button type="button" class="day-chip" data-day="5">金</button>
+          <button type="button" class="day-chip" data-day="6">土</button>
+          <button type="button" class="day-chip" data-day="0">日</button>
+        </div>
+        <div class="sched-form-row">
+          <select id="sched-preset" title="エージェント"></select>
+          <input id="sched-command" type="text" spellcheck="false" placeholder="起動コマンド" />
+        </div>
+        <div class="sched-form-row">
+          <input id="sched-name" type="text" spellcheck="false" placeholder="セッション名（省略可）" />
+        </div>
+        <div class="sched-form-row">
+          <label class="toggle">
+            <input id="sched-wt" type="checkbox" />
+            <span>worktree 隔離</span>
+          </label>
+          <input id="sched-wt-prefix" type="text" spellcheck="false" placeholder="ブランチ名プレフィックス（省略可）" disabled />
+        </div>
+        <div class="preset-form-actions">
+          <button type="submit" id="sched-submit">＋ 追加</button>
+          <button type="button" id="sched-cancel" class="ghost-btn" hidden>キャンセル</button>
+          <span id="sched-form-msg" class="field-hint" hidden></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="term-search" class="term-search" hidden>
     <input id="term-search-input" type="text" spellcheck="false" placeholder="ターミナル内を検索…" />
     <button type="button" id="term-search-prev" class="ghost-btn" title="前へ (Shift+Enter)">↑</button>
@@ -205,6 +257,7 @@
   <script src="../lib/gitstat.js"></script>
   <script src="../lib/layout.js"></script>
   <script src="../lib/workspace.js"></script>
+  <script src="../lib/schedule.js"></script>
   <script src="../lib/fuzzy.js"></script>
   <script src="../lib/presets.js"></script>
   <script src="../lib/syntax.js"></script>
@@ -216,6 +269,9 @@
   <script src="04-sessions.js"></script>
   <script src="05-diff.js"></script>
   <script src="06-keys-palette.js"></script>
-  <script src="07-overlays-boot.js"></script><!-- boot() lives here — must stay last -->
+  <script src="07-overlays-boot.js"></script><!-- boot() lives here -->
+  <!-- 08 registers onScheduleFire synchronously, before boot()'s first await resolves;
+       boot() then signals schedule:ready to main only after repos are loaded -->
+  <script src="08-schedules.js"></script>
 </body>
 </html>

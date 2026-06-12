@@ -12,6 +12,7 @@ const { defaultShell, sanitizeBranch, worktreeFolderName } = require('./lib/git-
 const Repos = require('./lib/repos');
 const GitStat = require('./lib/gitstat');
 const Version = require('./lib/version');
+const Schedule = require('./lib/schedule');
 
 const pexec = promisify(execFile);
 
@@ -52,6 +53,26 @@ function saveRepos(list) {
     fs.renameSync(tmp, file);
   } catch (err) {
     try { fs.rmSync(tmp, { force: true }); } catch (_) {} // don't leave a stray temp behind
+    throw err;
+  }
+}
+
+// ---- scheduled launches (persisted under userData) --------------------------
+function schedulesFile() { return path.join(app.getPath('userData'), 'schedules.json'); }
+function loadSchedules() {
+  // normalize() drops malformed entries, so one corrupt record can't break loading.
+  try { return Schedule.normalize(JSON.parse(fs.readFileSync(schedulesFile(), 'utf8'))); }
+  catch (_) { return []; }
+}
+// Same atomic write as saveRepos: a crash mid-write can't corrupt the file.
+function saveSchedules(list) {
+  const file = schedulesFile();
+  const tmp = file + '.tmp';
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    try { fs.rmSync(tmp, { force: true }); } catch (_) {}
     throw err;
   }
 }
@@ -110,6 +131,7 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   scheduleUpdateChecks();
+  startScheduler();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
@@ -299,6 +321,113 @@ ipcMain.handle('repos:remove', async (_e, { id }) => {
   }
   return { ok: true, repos: await enrichRepos(list) };
 });
+
+// ---- IPC: scheduled launches -------------------------------------------------
+function makeScheduleId() {
+  return 'sched_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+}
+/** List shape for the renderer: each entry carries its next firing time (FR-12). */
+function withNextFire(list) {
+  const now = Date.now();
+  return list.map((s) => ({ ...s, nextFireAt: Schedule.nextFireAt(s, now) }));
+}
+function saveSchedulesOr(list) {
+  try { saveSchedules(list); return null; }
+  catch (err) { return String((err && err.message) || err); }
+}
+
+ipcMain.handle('schedules:list', () => ({ ok: true, schedules: withNextFire(loadSchedules()) }));
+ipcMain.handle('schedules:add', (_e, raw) => {
+  const v = Schedule.validate(raw, Date.now());
+  if (!v.ok) return { ok: false, error: v.error, schedules: withNextFire(loadSchedules()) };
+  const list = loadSchedules().concat([{ id: makeScheduleId(), ...v.value }]);
+  const err = saveSchedulesOr(list);
+  if (err) return { ok: false, error: err, schedules: withNextFire(loadSchedules()) };
+  return { ok: true, schedules: withNextFire(list) };
+});
+ipcMain.handle('schedules:update', (_e, { id, patch }) => {
+  const list = loadSchedules();
+  const cur = list.find((s) => s.id === id);
+  if (!cur) return { ok: false, error: 'スケジュールが見つかりません', schedules: withNextFire(list) };
+  // Re-validate the merged result; an edit resets lastFiredAt (it's a new contract).
+  const v = Schedule.validate({ ...cur, ...patch }, Date.now());
+  if (!v.ok) return { ok: false, error: v.error, schedules: withNextFire(list) };
+  const next = list.map((s) => (s.id === id ? { id, ...v.value } : s));
+  const err = saveSchedulesOr(next);
+  if (err) return { ok: false, error: err, schedules: withNextFire(loadSchedules()) };
+  return { ok: true, schedules: withNextFire(next) };
+});
+ipcMain.handle('schedules:remove', (_e, { id }) => {
+  const next = loadSchedules().filter((s) => s.id !== id);
+  const err = saveSchedulesOr(next);
+  if (err) return { ok: false, error: err, schedules: withNextFire(loadSchedules()) };
+  return { ok: true, schedules: withNextFire(next) };
+});
+ipcMain.handle('schedules:toggle', (_e, { id, enabled }) => {
+  const next = loadSchedules().map((s) => (s.id === id ? { ...s, enabled: !!enabled } : s));
+  const err = saveSchedulesOr(next);
+  if (err) return { ok: false, error: err, schedules: withNextFire(loadSchedules()) };
+  return { ok: true, schedules: withNextFire(next) };
+});
+
+// ---- scheduler (main-resident: fires even with all windows closed on macOS) --
+const SCHED_TICK_MS = 30_000;
+const SCHED_GRACE_MS = 5 * 60_000; // §5.4 startup grace for missed one-shots
+const schedReadyContents = new Set(); // webContents ids whose renderer finished boot
+let schedLastTick = Date.now();
+let schedGraceChecked = false;
+
+ipcMain.on('schedule:ready', (e) => {
+  const wc = e.sender;
+  schedReadyContents.add(wc.id);
+  wc.once('destroyed', () => schedReadyContents.delete(wc.id));
+  if (!schedGraceChecked) {
+    schedGraceChecked = true;
+    const now = Date.now();
+    const list = loadSchedules();
+    const due = list.filter((s) => Schedule.missedOnce(s, now, SCHED_GRACE_MS));
+    if (due.length) fireSchedules(due, list, now);
+  }
+});
+
+/** Resolve a live window whose renderer can handle schedule:fire — reuse the
+ *  first window if one exists, otherwise create one and wait for its boot
+ *  (schedule:ready), with a timeout fallback so a wedged renderer can't block. */
+function ensureWindow() {
+  const win = BrowserWindow.getAllWindows()[0] || createWindow();
+  return new Promise((resolve) => {
+    if (schedReadyContents.has(win.webContents.id)) { resolve(win); return; }
+    const timer = setTimeout(done, 10_000);
+    function onReady(e) { if (e.sender.id === win.webContents.id) done(); }
+    function done() { clearTimeout(timer); ipcMain.removeListener('schedule:ready', onReady); resolve(win); }
+    ipcMain.on('schedule:ready', onReady);
+  });
+}
+
+async function fireSchedules(due, list, now) {
+  // Record firings (one-shots self-disable) and persist BEFORE launching, so a
+  // crash between the two can't replay the same firing on the next start.
+  let next = list;
+  for (const s of due) next = next.map((x) => (x.id === s.id ? Schedule.markFired(x, now) : x));
+  try { saveSchedules(next); } catch (_) {}
+  const win = await ensureWindow();
+  if (!win || win.isDestroyed()) return;
+  for (const s of due) win.webContents.send('schedule:fire', { schedule: s });
+}
+
+function startScheduler() {
+  // Wall-clock polling (not setTimeout-until-target): survives sleep/clock drift.
+  // shouldFire() checks the (lastTick, now] window, so a delayed tick still fires
+  // exactly once. Schedules are re-read each tick — the file is tiny and this
+  // keeps the loop in sync with CRUD edits with no in-memory state to reconcile.
+  setInterval(() => {
+    const now = Date.now();
+    const list = loadSchedules();
+    const due = list.filter((s) => Schedule.shouldFire(s, now, schedLastTick));
+    schedLastTick = now;
+    if (due.length) fireSchedules(due, list, now);
+  }, SCHED_TICK_MS);
+}
 
 // ---- IPC: misc -------------------------------------------------------------
 ipcMain.handle('dialog:openDir', async () => {
