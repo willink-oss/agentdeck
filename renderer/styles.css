@@ -689,3 +689,11 @@ select { appearance: none; cursor: pointer; }
 }
 .df-item:hover { color: var(--text); border-color: var(--accent-soft); }
 .df-item.active { color: var(--accent); border-color: rgba(240,136,62,0.45); }
+
+/* language switcher (sidebar footer) */
+.lang-switch {
+  width: auto; flex: none; padding: 2px 6px; font-size: 10px;
+  background: transparent; border: 1px solid var(--line); border-radius: 5px;
+  color: var(--text-dim); cursor: pointer;
+}
+.sidebar-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

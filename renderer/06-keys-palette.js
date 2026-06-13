@@ -67,11 +67,8 @@ window.addEventListener('keydown', (e) => {
     if (activeSessionId && sessions.has(activeSessionId)) { e.preventDefault(); e.stopPropagation(); openTermSearch(); }
   }
 }, true);
-// the static hint markup is written for macOS; relabel for the Ctrl+Shift chord
-if (!IS_MAC) {
-  const kbdHint = document.querySelector('.kbd-hint');
-  if (kbdHint) kbdHint.textContent = 'Ctrl+Shift+K 検索 · Ctrl+Shift+F 端末内検索 · Ctrl+Shift+1–9 ペイン · Ctrl+Shift+[ ] 移動 · Ctrl+Shift+Enter 起動 · Ctrl+Shift+W 終了';
-}
+// the keyboard chord differs per platform; t() picks the right hint string
+setKbdHint();
 // ---- in-terminal search (chord+F): find within the active session's scrollback ----
 const termSearchEl = $('#term-search');
 const termSearchInput = $('#term-search-input');
@@ -182,7 +179,7 @@ function renderPalette(query) {
   if (!ranked.length) {
     const li = document.createElement('li');
     li.className = 'palette-empty';
-    li.textContent = sessions.size ? '該当なし' : '起動中のセッションがありません';
+    li.textContent = sessions.size ? t('palette.none') : t('palette.noSessions');
     paletteList.appendChild(li);
     return;
   }

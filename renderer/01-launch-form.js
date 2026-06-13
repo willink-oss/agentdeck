@@ -46,7 +46,7 @@ async function refreshRepoHint() {
   if (!dir) { repoHint.textContent = ''; return; }
   try {
     const { repo } = await window.deck.isRepo(dir);
-    repoHint.textContent = repo ? '✓ git repository' : 'not a git repository';
+    repoHint.textContent = repo ? t('form.isRepo') : t('form.notRepo');
     repoHint.className = 'field-hint ' + (repo ? 'is-repo' : 'no-repo');
   } catch (_) { repoHint.textContent = ''; }
 }

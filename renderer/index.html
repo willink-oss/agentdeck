@@ -13,17 +13,17 @@
   <div id="app">
     <aside id="repos">
       <div class="repos-head">
-        <span class="repos-title">Repositories</span>
+        <span class="repos-title" data-i18n="repos.title">Repositories</span>
         <div class="repos-actions">
-          <button type="button" id="repo-refresh" title="Refresh git status">&#x21bb;</button>
-          <button type="button" id="repo-add" title="Add repository (folder)">+</button>
+          <button type="button" id="repo-refresh" data-i18n-title="repos.refresh" title="Refresh git status">&#x21bb;</button>
+          <button type="button" id="repo-add" data-i18n-title="repos.add" title="Add repository (folder)">+</button>
         </div>
       </div>
       <div id="repo-msg" class="repo-msg" hidden></div>
       <div id="repo-list" class="repo-list"></div>
       <div id="repo-empty" class="repo-empty">
-        <p>リポジトリ未登録</p>
-        <p class="repo-empty-sub">＋ でローカルフォルダを追加</p>
+        <p data-i18n="repos.empty">リポジトリ未登録</p>
+        <p class="repo-empty-sub" data-i18n="repos.emptySub">＋ でローカルフォルダを追加</p>
       </div>
     </aside>
 
@@ -32,35 +32,35 @@
         <span class="brand-mark">&#x259A;</span>
         <div class="brand-text">
           <h1>AGENT&middot;DECK</h1>
-          <p>parallel agent terminals</p>
+          <p data-i18n="app.tagline">parallel agent terminals</p>
         </div>
       </div>
 
       <form id="launch-form" autocomplete="off">
         <label class="field">
-          <span class="field-label">Agent
-            <button type="button" id="preset-manage" class="preset-manage" title="プリセットを管理">&#9881;</button>
-            <button type="button" id="sched-manage" class="preset-manage" title="スケジュール起動を管理">&#9200;</button>
+          <span class="field-label"><span data-i18n="form.agent">Agent</span>
+            <button type="button" id="preset-manage" class="preset-manage" data-i18n-title="form.managePresets" title="プリセットを管理">&#9881;</button>
+            <button type="button" id="sched-manage" class="preset-manage" data-i18n-title="form.manageSched" title="スケジュール起動を管理">&#9200;</button>
           </span>
           <select id="preset"></select>
         </label>
 
         <label class="field">
-          <span class="field-label">Startup command</span>
+          <span class="field-label" data-i18n="form.startup">Startup command</span>
           <input id="command" type="text" spellcheck="false" placeholder="claude" />
-          <span class="field-hint">セッション起動時に自動実行されます</span>
+          <span class="field-hint" data-i18n="form.startupHint">セッション起動時に自動実行されます</span>
         </label>
 
         <label class="field">
-          <span class="field-label">Name <em>(optional)</em></span>
+          <span class="field-label" data-i18n="form.name">Name (optional)</span>
           <input id="name" type="text" spellcheck="false" placeholder="auto" />
         </label>
 
         <label class="field">
-          <span class="field-label">Working directory</span>
+          <span class="field-label" data-i18n="form.workdir">Working directory</span>
           <div class="dir-row">
             <input id="cwd" type="text" spellcheck="false" placeholder="~" />
-            <button type="button" id="browse" title="Browse">&hellip;</button>
+            <button type="button" id="browse" data-i18n-title="form.browse" title="Browse">&hellip;</button>
           </div>
           <span class="field-hint" id="repo-hint"></span>
         </label>
@@ -68,28 +68,32 @@
         <div class="field wt-field">
           <label class="toggle">
             <input id="wt-enable" type="checkbox" />
-            <span>Isolate in git worktree</span>
+            <span data-i18n="form.isolate">Isolate in git worktree</span>
           </label>
           <input id="wt-branch" type="text" spellcheck="false" placeholder="agentdeck/branch-name" disabled />
-          <span class="field-hint">新規ブランチ＋作業ツリーで隔離起動（競合防止）</span>
+          <span class="field-hint" data-i18n="form.isolateHint">新規ブランチ＋作業ツリーで隔離起動（競合防止）</span>
         </div>
 
         <button type="submit" id="launch">&#9654; Launch agent</button>
-        <div class="kbd-hint">&#8984;K 検索 &middot; &#8984;F 端末内検索 &middot; &#8984;1&ndash;9 ペイン &middot; &#8984;[ &#8984;] 移動 &middot; &#8984;&crarr; 起動 &middot; &#8984;W 終了</div>
+        <div class="kbd-hint" id="kbd-hint"></div>
       </form>
 
       <div class="quick">
-        <span class="quick-label">Quick launch</span>
+        <span class="quick-label" data-i18n="quick.label">Quick launch</span>
         <div class="quick-chips" id="quick-chips"></div>
       </div>
 
       <div class="legend">
-        <span><i class="dot live"></i>live</span>
-        <span><i class="dot waiting"></i>attention</span>
-        <span><i class="dot"></i>exited</span>
+        <span><i class="dot live"></i><span data-i18n="legend.live">live</span></span>
+        <span><i class="dot waiting"></i><span data-i18n="legend.attention">attention</span></span>
+        <span><i class="dot"></i><span data-i18n="legend.exited">exited</span></span>
       </div>
 
       <div class="sidebar-foot">
+        <select id="lang-switch" class="lang-switch" data-i18n-title="lang.label" title="Language">
+          <option value="ja">日本語</option>
+          <option value="en">English</option>
+        </select>
         <div id="sys-info">&mdash;</div>
         <div id="count">0 sessions</div>
       </div>
@@ -99,9 +103,9 @@
       <div id="stage-toolbar" class="stage-toolbar">
         <div id="stage-filter" class="stage-filter" hidden>
           <span id="stage-filter-label"></span>
-          <button type="button" id="stage-all" class="sf-all">すべて表示</button>
+          <button type="button" id="stage-all" class="sf-all" data-i18n="stage.showAll">すべて表示</button>
         </div>
-        <div id="layout-switch" class="layout-switch" title="グリッドの列数">
+        <div id="layout-switch" class="layout-switch" data-i18n-title="layout.title" title="グリッドの列数">
           <button type="button" class="ls-btn active" data-cols="auto">auto</button>
           <button type="button" class="ls-btn" data-cols="1">1</button>
           <button type="button" class="ls-btn" data-cols="2">2</button>
@@ -111,9 +115,8 @@
       <div id="empty" class="empty">
         <div class="empty-inner">
           <span class="empty-mark">&#x259A;&#x259A;&#x259A;</span>
-          <h2>No agents running</h2>
-          <p>左のパネルからエージェントを起動すると、ここにターミナルが並びます。<br />
-             複数立ち上げれば並列で監視できます。</p>
+          <h2 id="empty-title" data-i18n="empty.title">No agents running</h2>
+          <p id="empty-desc" data-i18n="empty.desc">左のパネルからエージェントを起動すると、ここにターミナルが並びます。複数立ち上げれば並列で監視できます。</p>
           <button type="button" id="restore-deck" class="restore-deck" hidden></button>
         </div>
       </div>
@@ -130,16 +133,16 @@
           <span id="diff-branch" class="pane-badge"></span>
         </div>
         <div class="diff-actions">
-          <button id="diff-merge" class="ghost-btn" hidden>merge ↩ base</button>
-          <button id="diff-pr" class="ghost-btn" hidden>PR 作成</button>
-          <button id="diff-refresh" class="ghost-btn">refresh</button>
-          <button id="diff-close" class="ghost-btn">close</button>
+          <button id="diff-merge" class="ghost-btn" data-i18n="diff.merge" hidden>merge ↩ base</button>
+          <button id="diff-pr" class="ghost-btn" data-i18n="diff.pr" hidden>PR 作成</button>
+          <button id="diff-refresh" class="ghost-btn" data-i18n="common.refresh">refresh</button>
+          <button id="diff-close" class="ghost-btn" data-i18n="common.close">close</button>
         </div>
       </div>
       <div id="diff-meta" class="diff-meta"></div>
       <div id="diff-files" class="diff-files" hidden>
-        <button type="button" id="diff-prev-file" class="ghost-btn df-nav" title="前のファイル">↑</button>
-        <button type="button" id="diff-next-file" class="ghost-btn df-nav" title="次のファイル">↓</button>
+        <button type="button" id="diff-prev-file" class="ghost-btn df-nav" data-i18n-title="diff.prevFile" title="前のファイル">↑</button>
+        <button type="button" id="diff-next-file" class="ghost-btn df-nav" data-i18n-title="diff.nextFile" title="次のファイル">↓</button>
         <div id="diff-file-list" class="diff-file-list"></div>
       </div>
       <pre id="diff-body" class="diff-body"></pre>
@@ -150,9 +153,9 @@
     <div class="palette-backdrop" id="palette-backdrop"></div>
     <div class="palette-panel">
       <input id="palette-input" type="text" spellcheck="false" autocomplete="off"
-             placeholder="セッションを検索…（名前 / リポ / ブランチ / preset）" />
+             data-i18n-ph="palette.ph" placeholder="セッションを検索…（名前 / リポ / ブランチ / preset）" />
       <ul id="palette-list" class="palette-list"></ul>
-      <div class="palette-foot">↑↓ 選択 · ↵ 移動 · Esc 閉じる</div>
+      <div class="palette-foot" data-i18n="palette.foot">↑↓ 選択 · ↵ 移動 · Esc 閉じる</div>
     </div>
   </div>
 
@@ -160,16 +163,16 @@
     <div class="preset-backdrop" id="preset-backdrop"></div>
     <div class="preset-panel">
       <div class="preset-head">
-        <span class="preset-title">Agent presets</span>
-        <button type="button" id="preset-close" class="ghost-btn">close</button>
+        <span class="preset-title" data-i18n="presets.title">Agent presets</span>
+        <button type="button" id="preset-close" class="ghost-btn" data-i18n="common.close">close</button>
       </div>
       <ul id="preset-list" class="preset-list"></ul>
       <form id="preset-form" autocomplete="off">
-        <input id="preset-label-input" type="text" spellcheck="false" placeholder="表示名（例: Aider）" />
-        <input id="preset-cmd-input" type="text" spellcheck="false" placeholder="起動コマンド（例: aider）" />
+        <input id="preset-label-input" type="text" spellcheck="false" data-i18n-ph="presets.labelPh" placeholder="表示名（例: Aider）" />
+        <input id="preset-cmd-input" type="text" spellcheck="false" data-i18n-ph="presets.cmdPh" placeholder="起動コマンド（例: aider）" />
         <div class="preset-form-actions">
-          <button type="submit" id="preset-submit">＋ 追加</button>
-          <button type="button" id="preset-cancel" class="ghost-btn" hidden>キャンセル</button>
+          <button type="submit" id="preset-submit" data-i18n="common.add">＋ 追加</button>
+          <button type="button" id="preset-cancel" class="ghost-btn" data-i18n="common.cancel" hidden>キャンセル</button>
           <span id="preset-form-msg" class="field-hint" hidden></span>
         </div>
       </form>
@@ -180,20 +183,20 @@
     <div class="preset-backdrop" id="sched-backdrop"></div>
     <div class="preset-panel">
       <div class="preset-head">
-        <span class="preset-title">&#9200; スケジュール起動</span>
-        <button type="button" id="sched-close" class="ghost-btn">close</button>
+        <span class="preset-title">&#9200; <span data-i18n="sched.title">スケジュール起動</span></span>
+        <button type="button" id="sched-close" class="ghost-btn" data-i18n="common.close">close</button>
       </div>
       <ul id="sched-list" class="preset-list"></ul>
       <form id="sched-form" autocomplete="off">
         <div class="sched-form-row">
-          <select id="sched-repo" title="リポジトリ"></select>
-          <input id="sched-time" type="time" required title="起動時刻" />
-          <select id="sched-repeat" title="繰り返し">
-            <option value="daily">毎日</option>
-            <option value="weekly">曜日指定</option>
-            <option value="once">一回のみ</option>
+          <select id="sched-repo" data-i18n-title="sched.repo" title="リポジトリ"></select>
+          <input id="sched-time" type="time" required data-i18n-title="sched.time" title="起動時刻" />
+          <select id="sched-repeat" data-i18n-title="sched.repeat" title="繰り返し">
+            <option value="daily" data-i18n="sched.daily">毎日</option>
+            <option value="weekly" data-i18n="sched.weekly">曜日指定</option>
+            <option value="once" data-i18n="sched.once">一回のみ</option>
           </select>
-          <input id="sched-date" type="date" title="日付（一回のみ）" hidden />
+          <input id="sched-date" type="date" data-i18n-title="sched.date" title="日付（一回のみ）" hidden />
         </div>
         <div id="sched-days" class="sched-days" hidden>
           <button type="button" class="day-chip" data-day="1">月</button>
@@ -205,22 +208,22 @@
           <button type="button" class="day-chip" data-day="0">日</button>
         </div>
         <div class="sched-form-row">
-          <select id="sched-preset" title="エージェント"></select>
-          <input id="sched-command" type="text" spellcheck="false" placeholder="起動コマンド" />
+          <select id="sched-preset" data-i18n-title="sched.agent" title="エージェント"></select>
+          <input id="sched-command" type="text" spellcheck="false" data-i18n-ph="sched.cmdPh" placeholder="起動コマンド" />
         </div>
         <div class="sched-form-row">
-          <input id="sched-name" type="text" spellcheck="false" placeholder="セッション名（省略可）" />
+          <input id="sched-name" type="text" spellcheck="false" data-i18n-ph="sched.namePh" placeholder="セッション名（省略可）" />
         </div>
         <div class="sched-form-row">
           <label class="toggle">
             <input id="sched-wt" type="checkbox" />
-            <span>worktree 隔離</span>
+            <span data-i18n="sched.wt">worktree 隔離</span>
           </label>
-          <input id="sched-wt-prefix" type="text" spellcheck="false" placeholder="ブランチ名プレフィックス（省略可）" disabled />
+          <input id="sched-wt-prefix" type="text" spellcheck="false" data-i18n-ph="sched.wtPrefixPh" placeholder="ブランチ名プレフィックス（省略可）" disabled />
         </div>
         <div class="preset-form-actions">
-          <button type="submit" id="sched-submit">＋ 追加</button>
-          <button type="button" id="sched-cancel" class="ghost-btn" hidden>キャンセル</button>
+          <button type="submit" id="sched-submit" data-i18n="common.add">＋ 追加</button>
+          <button type="button" id="sched-cancel" class="ghost-btn" data-i18n="common.cancel" hidden>キャンセル</button>
           <span id="sched-form-msg" class="field-hint" hidden></span>
         </div>
       </form>
@@ -228,24 +231,24 @@
   </div>
 
   <div id="term-search" class="term-search" hidden>
-    <input id="term-search-input" type="text" spellcheck="false" placeholder="ターミナル内を検索…" />
-    <button type="button" id="term-search-prev" class="ghost-btn" title="前へ (Shift+Enter)">↑</button>
-    <button type="button" id="term-search-next" class="ghost-btn" title="次へ (Enter)">↓</button>
-    <button type="button" id="term-search-close" class="ghost-btn" title="閉じる (Esc)">×</button>
+    <input id="term-search-input" type="text" spellcheck="false" data-i18n-ph="search.ph" placeholder="ターミナル内を検索…" />
+    <button type="button" id="term-search-prev" class="ghost-btn" data-i18n-title="search.prev" title="前へ (Shift+Enter)">↑</button>
+    <button type="button" id="term-search-next" class="ghost-btn" data-i18n-title="search.next" title="次へ (Enter)">↓</button>
+    <button type="button" id="term-search-close" class="ghost-btn" data-i18n-title="search.close" title="閉じる (Esc)">×</button>
   </div>
 
   <div id="term-menu" class="term-menu" hidden>
-    <button type="button" data-act="copy">コピー</button>
-    <button type="button" data-act="paste">ペースト</button>
-    <button type="button" data-act="selectall">すべて選択</button>
-    <button type="button" data-act="clear">クリア</button>
+    <button type="button" data-act="copy" data-i18n="menu.copy">コピー</button>
+    <button type="button" data-act="paste" data-i18n="menu.paste">ペースト</button>
+    <button type="button" data-act="selectall" data-i18n="menu.selectAll">すべて選択</button>
+    <button type="button" data-act="clear" data-i18n="menu.clear">クリア</button>
   </div>
 
   <div id="update-toast" class="update-toast" hidden>
     <span class="ut-mark">↑</span>
     <span id="update-toast-text"></span>
-    <button type="button" id="update-download" class="ut-btn">ダウンロード</button>
-    <button type="button" id="update-dismiss" class="ut-dismiss" title="閉じる">×</button>
+    <button type="button" id="update-download" class="ut-btn" data-i18n="update.download">ダウンロード</button>
+    <button type="button" id="update-dismiss" class="ut-dismiss" data-i18n-title="update.dismiss" title="閉じる">×</button>
   </div>
 
   <script src="../node_modules/xterm/lib/xterm.js"></script>
@@ -261,6 +264,7 @@
   <script src="../lib/fuzzy.js"></script>
   <script src="../lib/presets.js"></script>
   <script src="../lib/syntax.js"></script>
+  <script src="../lib/i18n.js"></script>
   <!-- renderer scripts: classic scripts share one global lexical scope — order matters -->
   <script src="00-state.js"></script>
   <script src="01-launch-form.js"></script>

@@ -24,6 +24,7 @@
 9. **エージェント・プリセット管理** — Agent 横の ⚙ から**カスタムプリセット（表示名＋起動コマンド）を追加・編集・削除**。Aider 等の任意 CLI をコード変更なしで登録でき、select と Quick launch チップに反映（localStorage 永続）
 10. **キーボード操作** — ペイン移動（1–9）・前後循環（[ ]）・クイック起動（Enter）・終了（W）・**コマンドパレット（K・fuzzy 検索でセッションへジャンプ）**。修飾キーは macOS が **⌘**、Windows / Linux が **Ctrl+Shift**（素の Ctrl はシェル/readline のキーのため、ターミナルアプリの慣習に準拠）
 11. **スケジュール起動（⏰）** — 「リポジトリ × エージェント × 時刻」を登録すると指定時刻にセッションを自動起動。繰り返し（一回のみ / 毎日 / 曜日指定）、worktree 隔離（発火ごとに日時付きブランチで一意化）、有効/無効トグル・次回発火表示・起動時の OS 通知に対応。Agent 横の ⏰ かリポジトリ行の ⏰ から登録（`userData/schedules.json` に永続化、スケジューラは main プロセス常駐で 30 秒間隔の壁時計照合 — スリープ復帰でも取りこぼし/二重発火なし）
+12. **多言語対応（日本語 / 英語）** — UI を日本語・英語で切り替え（サイドバー下部のセレクタ）。初回は OS のロケールに追従。文字列は依存ゼロの `lib/i18n.js` 辞書（`{key: {ja, en}}`）で一元管理（中文・韓国語は issue #10 で追加予定）
 
 ---
 
@@ -133,7 +134,8 @@ agentdeck/
 │   ├── fuzzy.js         #   score（⌘K パレットの部分列マッチ）
 │   ├── version.js       #   compare / isNewer（アップデートチェック）
 │   ├── presets.js       #   ビルトイン定義 + validate / keyFor / merge（プリセット管理）
-│   └── schedule.js      #   validate / nextFireAt / shouldFire / markFired（スケジュール起動）
+│   ├── schedule.js      #   validate / nextFireAt / shouldFire / markFired（スケジュール起動）
+│   └── i18n.js          #   t(key) / 辞書（ja / en の多言語）
 ├── renderer/            # UI（順序ロードの classic script 群 — global lexical scope を共有）
 │   ├── index.html       #   script の並び順がロード順（boot を含む 07 → 08 の順を維持）
 │   ├── 00-state.js      #   共有状態・定数・DOM refs・lib バインディング
@@ -148,7 +150,7 @@ agentdeck/
 │   └── styles.css
 ├── e2e/
 │   └── smoke.cjs        # CI 用ヘッドレス起動スモーク（3 OS・起動/preload/IPC/node-pty）
-└── test/                # node --test 用ユニットテスト（155 cases）
+└── test/                # node --test 用ユニットテスト（164 cases）
 ```
 
 ## 既知の割り切り

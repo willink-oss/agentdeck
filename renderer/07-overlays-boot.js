@@ -7,13 +7,13 @@ let updateUrl = '';
 let lastNotifiedUpdate = ''; // dedup: the 6h re-poll must not re-notify the same version
 function showUpdate(p) {
   updateUrl = p.url || '';
-  updateToastText.textContent = `新しいバージョン v${p.latest} が利用できます（現在 v${p.current}）`;
+  updateToastText.textContent = t('update.toast', { latest: p.latest, current: p.current });
   updateToast.hidden = false;
   // also raise an OS notification (once per version) so an update is noticed even
   // when the window is in the background; clicking it opens the download page
   if (p.latest && p.latest !== lastNotifiedUpdate) {
     lastNotifiedUpdate = p.latest;
-    notify(`新しいバージョン v${p.latest} が利用できます。クリックでダウンロードページを開きます。`,
+    notify(t('update.notif', { latest: p.latest }),
       () => { if (updateUrl) window.deck.openExternal(updateUrl); });
   }
 }
@@ -34,7 +34,7 @@ let editingPresetKey = null;
 function resetPresetForm() {
   editingPresetKey = null;
   presetForm.reset();
-  presetSubmitBtn.textContent = '＋ 追加';
+  presetSubmitBtn.textContent = t('common.add');
   presetCancelBtn.hidden = true;
   presetFormMsg.hidden = true;
 }
@@ -50,14 +50,14 @@ function renderPresetList() {
     li.append(nm, cmd);
     if (Presets.isBuiltin(key)) {
       const tag = document.createElement('span');
-      tag.className = 'preset-row-tag'; tag.textContent = 'ビルトイン';
+      tag.className = 'preset-row-tag'; tag.textContent = t('presets.builtin');
       li.appendChild(tag);
     } else {
       const edit = document.createElement('button');
-      edit.type = 'button'; edit.className = 'ghost-btn'; edit.textContent = '編集';
+      edit.type = 'button'; edit.className = 'ghost-btn'; edit.textContent = t('common.edit');
       edit.addEventListener('click', () => startPresetEdit(key));
       const del = document.createElement('button');
-      del.type = 'button'; del.className = 'ghost-btn'; del.textContent = '削除';
+      del.type = 'button'; del.className = 'ghost-btn'; del.textContent = t('common.delete');
       del.addEventListener('click', () => deletePreset(key));
       li.append(edit, del);
     }
@@ -70,7 +70,7 @@ function startPresetEdit(key) {
   editingPresetKey = key;
   presetLabelInput.value = c.label;
   presetCmdInput.value = c.cmd;
-  presetSubmitBtn.textContent = '保存';
+  presetSubmitBtn.textContent = t('common.save');
   presetCancelBtn.hidden = false;
   presetFormMsg.hidden = true;
   presetLabelInput.focus();
@@ -78,7 +78,7 @@ function startPresetEdit(key) {
 function deletePreset(key) {
   const c = customPresets.find((p) => p.key === key);
   if (!c) return;
-  if (!confirm(`プリセット「${c.label}」を削除しますか？`)) return;
+  if (!confirm(t('presets.confirmDelete', { label: c.label }))) return;
   customPresets = customPresets.filter((p) => p.key !== key);
   saveCustomPresets();
   if (editingPresetKey === key) resetPresetForm();

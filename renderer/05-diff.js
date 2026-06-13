@@ -17,15 +17,15 @@ async function openDiff(id) {
 function closeDiff() { diffOverlay.hidden = true; diffSessionId = null; }
 
 async function renderDiff(s) {
-  diffMeta.textContent = 'loading…';
+  diffMeta.textContent = t('diff.loading');
   diffBody.innerHTML = '';
   const res = await window.deck.gitDiff(s.gitCwd, s.baseSha);
   if (!res || !res.ok) {
-    diffMeta.textContent = res ? res.error : 'diff failed';
+    diffMeta.textContent = res ? res.error : t('diff.failed');
     return;
   }
   const stat = (res.stat || '').trim();
-  diffMeta.textContent = stat || 'no tracked changes vs base';
+  diffMeta.textContent = stat || t('diff.noChanges');
   paintDiff(res.diff, res.untracked);
 }
 function paintDiff(diff, untracked) {
@@ -99,28 +99,28 @@ $('#diff-refresh').addEventListener('click', () => {
 diffMerge.addEventListener('click', async () => {
   const s = sessions.get(diffSessionId);
   if (!s || !s.gitRoot || !s.branch) return;
-  if (!confirm(`セッションのブランチ「${s.branch}」をベースブランチへ merge します。よろしいですか？`)) return;
+  if (!confirm(t('diff.confirmMerge', { branch: s.branch }))) return;
   diffMerge.disabled = true;
-  diffMeta.textContent = `merging ${s.branch} …`;
+  diffMeta.textContent = t('diff.merging', { branch: s.branch });
   const res = await window.deck.gitMerge({ root: s.gitRoot, branch: s.branch, worktree: s.worktreePath });
   if (!res || !res.ok) {
-    diffMeta.textContent = '⚠ ' + (res ? res.error : 'merge failed');
+    diffMeta.textContent = '⚠ ' + (res ? res.error : t('diff.mergeFailed'));
     diffMerge.disabled = false;
     return;
   }
-  diffMeta.textContent = `✓ merged ${res.ahead} commit(s): ${res.branch} → ${res.target}`;
+  diffMeta.textContent = t('diff.merged', { ahead: res.ahead, branch: res.branch, target: res.target });
   refreshReposGit(); // base branch advanced → refresh sidebar git stats
 });
 diffPr.addEventListener('click', async () => {
   const s = sessions.get(diffSessionId);
   if (!s || !s.gitRoot || !s.branch) return;
-  if (!confirm(`「${s.branch}」を origin に push して PR を作成します。よろしいですか？`)) return;
+  if (!confirm(t('diff.confirmPr', { branch: s.branch }))) return;
   diffPr.disabled = diffMerge.disabled = true;
-  diffMeta.textContent = `creating PR for ${s.branch} …`;
+  diffMeta.textContent = t('diff.creatingPr', { branch: s.branch });
   const res = await window.deck.gitPr({ root: s.gitRoot, branch: s.branch, worktree: s.worktreePath });
   diffPr.disabled = diffMerge.disabled = false;
-  if (!res || !res.ok) { diffMeta.textContent = '⚠ ' + (res ? res.error : 'PR 作成に失敗しました'); return; }
-  diffMeta.textContent = res.url ? `✓ PR 作成: ${res.url}` : '✓ PR を作成しました';
+  if (!res || !res.ok) { diffMeta.textContent = '⚠ ' + (res ? res.error : t('diff.prFailed')); return; }
+  diffMeta.textContent = res.url ? t('diff.prCreated', { url: res.url }) : t('diff.prCreatedNoUrl');
   if (res.url) window.deck.openExternal(res.url); // open the PR in the browser
 });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !diffOverlay.hidden) closeDiff(); });

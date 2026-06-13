@@ -54,10 +54,8 @@ const restoreBtnEl = $('#restore-deck');
 const paletteEl = $('#palette');
 const paletteInput = $('#palette-input');
 const paletteList = $('#palette-list');
-const emptyTitleEl = $('#empty h2');
-const emptyDescEl = $('#empty p');
-const EMPTY_DEFAULT_TITLE = emptyTitleEl ? emptyTitleEl.textContent : 'No agents running';
-const EMPTY_DEFAULT_DESC = emptyDescEl ? emptyDescEl.innerHTML : '';
+const emptyTitleEl = $('#empty-title');
+const emptyDescEl = $('#empty-desc');
 
 // diff drawer refs
 const diffOverlay = $('#diff-overlay');
@@ -93,3 +91,62 @@ const GitStat = window.GitStat;
 const Layout = window.Layout;
 const Workspace = window.Workspace;
 const Fuzzy = window.Fuzzy;
+
+// ---- i18n (ja / en) ---------------------------------------------------------
+// Every user-facing string is keyed in lib/i18n.js; t(key, params) returns the
+// current language. Static markup carries data-i18n / data-i18n-ph / data-i18n-title;
+// applyI18n() fills them. Dynamic strings call t() at render time.
+const I18n = window.I18n;
+const LANG_KEY = 'agentdeck.lang';
+const t = (key, params) => I18n.t(key, params);
+function initLang() {
+  let saved = null;
+  try { saved = localStorage.getItem(LANG_KEY); } catch (_) {}
+  const lang = (saved && I18n.langs().indexOf(saved) !== -1)
+    ? saved : I18n.resolveLocale((navigator && navigator.language) || 'en');
+  I18n.setLang(lang);
+  document.documentElement.lang = lang;
+  return lang;
+}
+/** Fill every translatable node under root (default: document) for the current language. */
+function applyI18n(root) {
+  const r = root || document;
+  for (const el of r.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of r.querySelectorAll('[data-i18n-ph]')) el.setAttribute('placeholder', t(el.dataset.i18nPh));
+  for (const el of r.querySelectorAll('[data-i18n-title]')) el.setAttribute('title', t(el.dataset.i18nTitle));
+}
+function setKbdHint() {
+  const el = $('#kbd-hint');
+  if (el) el.textContent = t(IS_MAC ? 'hint.kbdMac' : 'hint.kbdOther');
+}
+function setDayChipLabels() {
+  const labels = I18n.weekdayLabels(); // index by getDay (0=Sun)
+  for (const b of document.querySelectorAll('#sched-days .day-chip')) b.textContent = labels[Number(b.dataset.day)];
+}
+/** Switch language live: persist, re-fill static markup, and refresh the dynamic
+ *  chrome that's already on screen (toasts etc. pick up the new language next time). */
+function setLanguage(lang) {
+  if (I18n.langs().indexOf(lang) === -1) return;
+  try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+  I18n.setLang(lang);
+  document.documentElement.lang = lang;
+  if (langSwitch) langSwitch.value = lang; // keep the selector in sync on programmatic calls
+  applyI18n();
+  setKbdHint();
+  setDayChipLabels();
+  updateCount();
+  updateLaunchLabel();
+  refreshRepoHint();
+  renderRepos();           // sidebar + empty state
+  updateWaitingTitle();    // document.title
+  renderSchedList();       // schedule modal list (if populated)
+  if (typeof renderPresetList === 'function') renderPresetList();
+}
+initLang();
+applyI18n(); // static chrome is in the DOM already (scripts load at body end)
+setDayChipLabels();
+const langSwitch = $('#lang-switch');
+if (langSwitch) {
+  langSwitch.value = I18n.getLang();
+  langSwitch.addEventListener('change', () => setLanguage(langSwitch.value));
+}

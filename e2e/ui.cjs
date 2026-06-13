@@ -63,8 +63,17 @@ async function closeHard(app) {
       win.on('dialog', (d) => d.accept());
       win.on('pageerror', (e) => console.error('renderer pageerror:', e && e.message));
       await win.waitForFunction(() => document.querySelectorAll('#preset option').length > 0, null, { timeout: TIMEOUT });
+      await win.evaluate(() => { try { setLanguage('en'); } catch (_) {} }); // deterministic UI language for assertions
     };
     await attachWindow();
+
+    // -- i18n: switching language flips the static chrome and <html lang> ---------
+    ok(await win.evaluate(() => document.querySelector('[data-i18n="repos.title"]').textContent) === 'Repositories', 'en: repos label is English');
+    await win.evaluate(() => setLanguage('ja'));
+    ok(await win.evaluate(() => document.querySelector('[data-i18n="repos.title"]').textContent) === 'リポジトリ', 'ja: repos label switches to Japanese');
+    ok(await win.evaluate(() => document.documentElement.lang) === 'ja', 'ja: <html lang> updated');
+    ok(await win.evaluate(() => document.querySelector('#launch').textContent.includes('エージェント')), 'ja: dynamic launch button label translated');
+    await win.evaluate(() => setLanguage('en')); // back to English for the rest of the run
 
     // -- setup: register the repo, launch "alpha" (repo) and "beta" (home) ----
     await app.evaluate(({ dialog }, dir) => {

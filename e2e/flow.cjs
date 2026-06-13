@@ -65,6 +65,7 @@ async function closeHard(app) {
     win.on('dialog', (d) => d.accept()); // auto-accept the merge confirm()
     win.on('pageerror', (e) => console.error('renderer pageerror:', e && e.message));
     await win.waitForFunction(() => document.querySelectorAll('#preset option').length > 0, null, { timeout: TIMEOUT });
+    await win.evaluate(() => { try { setLanguage('en'); } catch (_) {} }); // deterministic UI language for assertions
 
     // 1) register the repo through the real flow, with only the OS dialog mocked
     await app.evaluate(({ dialog }, dir) => {

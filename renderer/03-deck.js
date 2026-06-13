@@ -56,7 +56,7 @@ function loadWorkspace() {
 /** Show the empty-state restore button only when nothing is running and a deck was saved. */
 function refreshRestoreButton() {
   const n = sessions.size === 0 ? loadWorkspace().length : 0;
-  if (n > 0) { restoreBtnEl.textContent = `↻ 前回のデッキを復元 (${n})`; restoreBtnEl.hidden = false; }
+  if (n > 0) { restoreBtnEl.textContent = t('deck.restore', { n }); restoreBtnEl.hidden = false; }
   else { restoreBtnEl.hidden = true; }
 }
 async function restoreWorkspace() {

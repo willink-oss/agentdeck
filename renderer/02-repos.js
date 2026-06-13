@@ -42,12 +42,12 @@ async function addRepoFlow() {
   // The home dir is already pinned as the synthetic Home entry; registering it
   // would persist a duplicate that Home shadows and hides the remove button on.
   if (homeRepo && normRepoPath(dir) === homeRepo.id) {
-    flashRepoMsg('ホームディレクトリは常に「Home」として表示されています。'); return;
+    flashRepoMsg(t('repo.homeAlways')); return;
   }
   const res = await window.deck.reposAdd(dir);
   setRepos((res && res.repos) || []);
   retagSessions();
-  if (res && res.ok === false) { flashRepoMsg('リポジトリの保存に失敗しました: ' + (res.error || '')); renderRepos(); return; }
+  if (res && res.ok === false) { flashRepoMsg(t('repo.saveFailed', { error: res.error || '' })); renderRepos(); return; }
   renderRepos();
   const added = Repos.findRepo(repos, normRepoPath(dir));
   if (added) selectRepo(added.id);
@@ -57,7 +57,7 @@ async function removeRepoFromList(id) {
   setRepos((res && res.repos) || []);
   if (activeRepoId === id) activeRepoId = null;
   retagSessions();
-  if (res && res.ok === false) flashRepoMsg('リポジトリの保存に失敗しました: ' + (res.error || ''));
+  if (res && res.ok === false) flashRepoMsg(t('repo.saveFailed', { error: res.error || '' }));
   else disableSchedulesForRepo(id); // FR-10: schedules pointing here go dormant, not lost
   renderRepos();
 }
@@ -75,7 +75,7 @@ async function refreshReposGit() {
 }
 function updateLaunchLabel() {
   const r = activeRepoId ? findEff(activeRepoId) : null;
-  launchBtn.textContent = r ? `▶ ${r.name} で起動` : '▶ Launch agent';
+  launchBtn.textContent = r ? t('repo.launchFor', { repo: r.name }) : t('repo.launch');
 }
 function updateActiveHighlight() {
   for (const el of repoListEl.querySelectorAll('.repo-item[data-repo-id]')) {
@@ -84,11 +84,11 @@ function updateActiveHighlight() {
 }
 function setEmptyState(filteredRepoName) {
   if (filteredRepoName == null) {
-    emptyTitleEl.textContent = EMPTY_DEFAULT_TITLE;
-    emptyDescEl.innerHTML = EMPTY_DEFAULT_DESC;
+    emptyTitleEl.textContent = t('empty.title');
+    emptyDescEl.textContent = t('empty.desc');
   } else {
     emptyTitleEl.textContent = filteredRepoName;
-    emptyDescEl.textContent = 'このリポジトリには起動中のエージェントがありません。▶ Launch で起動できます。';
+    emptyDescEl.textContent = t('empty.forRepo');
   }
 }
 /** Apply the repo focus-filter to the terminal grid, the filter pill, and the empty state. */
@@ -102,7 +102,7 @@ function updateStage() {
   }
   const r = activeRepoId ? findEff(activeRepoId) : null;
   if (r && total > 0 && visible < total) {
-    stageFilterLabel.textContent = `▦ ${r.name} のみ表示中`;
+    stageFilterLabel.textContent = t('repo.onlyShowing', { repo: r.name });
     stageFilterEl.hidden = false;
   } else {
     stageFilterEl.hidden = true;
@@ -245,7 +245,7 @@ function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees,
     const sc = document.createElement('button');
     sc.className = 'repo-sched';
     sc.textContent = '⏰';
-    sc.title = 'このリポジトリでスケジュール起動を追加';
+    sc.title = t('repo.schedAdd');
     sc.addEventListener('click', (e) => { e.stopPropagation(); openScheduleManagerForRepo(repoId); });
     row.appendChild(sc);
   }
@@ -253,7 +253,7 @@ function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees,
     const rm = document.createElement('button');
     rm.className = 'repo-remove';
     rm.textContent = '×';
-    rm.title = 'Remove from list';
+    rm.title = t('repo.remove');
     rm.addEventListener('click', (e) => { e.stopPropagation(); removeRepoFromList(repoId); });
     row.appendChild(rm);
   }

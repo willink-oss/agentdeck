@@ -17,16 +17,16 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   const head = document.createElement('div');
   head.className = 'pane-head';
   head.innerHTML =
-    '<span class="pane-grip" title="ドラッグで並べ替え">⠿</span>' +
+    '<span class="pane-grip" data-i18n-title="pane.drag">⠿</span>' +
     '<span class="status-dot live"></span>' +
     '<span class="pane-name"></span>' +
     `<span class="pane-badge">${preset.badge}</span>` +
     '<span class="pane-cwd"></span>' +
-    '<button class="pane-diff" title="Review git diff">diff</button>' +
-    '<button class="pane-kill" title="Kill session">kill</button>';
+    '<button class="pane-diff" data-i18n-title="pane.diff">diff</button>' +
+    '<button class="pane-kill" data-i18n-title="pane.kill">kill</button>';
   const nameEl = head.querySelector('.pane-name');
   nameEl.textContent = displayName;
-  nameEl.title = 'ダブルクリックで名前変更';
+  nameEl.setAttribute('data-i18n-title', 'pane.rename');
   nameEl.addEventListener('dblclick', (e) => { e.stopPropagation(); startRename(id, nameEl); });
   head.querySelector('.pane-cwd').textContent = workdir || '~';
   // drag the grip handle (not the whole header) to reorder panes — keeps diff/kill clickable
@@ -43,6 +43,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   pane.appendChild(head);
   pane.appendChild(termHost);
   grid.appendChild(pane);
+  applyI18n(pane); // fill pane-head tooltips (and re-fill on language switch)
 
   const term = new window.Terminal({
     fontFamily: '"JetBrains Mono","SF Mono","Menlo","Consolas",monospace',
@@ -109,7 +110,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
     }
   } else {
     diffBtn.disabled = true;
-    diffBtn.title = 'not a git repository';
+    diffBtn.title = t('form.notRepo');
   }
   term.focus();
   markActive(id);
@@ -145,7 +146,7 @@ function setExited(id) {
 
 function updateCount() {
   const n = sessions.size;
-  countEl.textContent = `${n} session${n === 1 ? '' : 's'}`;
+  countEl.textContent = t('count.sessions', { n });
 }
 
 // ---- attention detection ---------------------------------------------------
@@ -156,7 +157,7 @@ function setAttention(s, id) {
   if (dot) { dot.classList.remove('live'); dot.classList.add('waiting'); }
   updateWaitingTitle();
   refreshSessionState(s);
-  if (!windowFocused) notify(`${s.name} が入力待ちです`);
+  if (!windowFocused) notify(t('notify.attention', { name: s.name }));
 }
 function clearAttention(s) {
   if (!s.attention) return;
@@ -170,7 +171,7 @@ function clearAttention(s) {
 function updateWaitingTitle() {
   let n = 0;
   for (const s of sessions.values()) if (s.attention) n++;
-  document.title = n > 0 ? `(${n}) Agent Deck — needs attention` : 'Agent Deck';
+  document.title = n > 0 ? t('title.attention', { n }) : 'Agent Deck';
 }
 function notify(body, onClick) {
   try {

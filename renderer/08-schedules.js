@@ -22,7 +22,6 @@ const schedSubmitBtn = $('#sched-submit');
 const schedCancelBtn = $('#sched-cancel');
 const schedFormMsg = $('#sched-form-msg');
 
-const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 let schedules = [];
 let editingScheduleId = null;
 
@@ -30,7 +29,7 @@ let editingScheduleId = null;
 window.deck.onScheduleFire(({ schedule }) => {
   const repo = findEff(schedule.repoId);
   if (!repo) {
-    flashRepoMsg(`⏰ スケジュールのリポジトリが見つかりません: ${schedule.repoId}`);
+    flashRepoMsg(t('sched.notFound', { repoId: schedule.repoId }));
     return;
   }
   const L = schedule.launch;
@@ -43,7 +42,7 @@ window.deck.onScheduleFire(({ schedule }) => {
     // a fresh minute-stamped branch per firing, so repeats never collide (FR-4)
     branch: L.worktree ? Schedule.uniqueBranch(L.branchPrefix, L.presetKey, Date.now()) : '',
   });
-  notify(`⏰ ${repo.name} でスケジュールセッションを起動しました`);
+  notify(t('sched.fired', { repo: repo.name }));
 });
 
 /** Disable every schedule pointing at a just-unregistered repo (FR-10). */
@@ -61,12 +60,12 @@ function fmtFireAt(ms) {
   if (!ms) return '—';
   const d = new Date(ms);
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getMonth() + 1}/${d.getDate()}(${DAY_LABELS[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getMonth() + 1}/${d.getDate()}(${I18n.weekdayLabels()[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 function repeatLabel(rep) {
   if (rep.type === 'once') return rep.date;
-  if (rep.type === 'daily') return '毎日';
-  return (rep.days || []).map((d) => DAY_LABELS[d]).join('');
+  if (rep.type === 'daily') return t('sched.daily');
+  return (rep.days || []).map((d) => I18n.weekdayLabels()[d]).join('');
 }
 
 function buildSchedRepoOptions(selectedId) {
@@ -99,9 +98,9 @@ function setSelectedDays(days) {
   }
 }
 function refreshRepeatFields() {
-  const t = schedRepeatSel.value;
-  schedDateInput.hidden = t !== 'once';
-  schedDaysEl.hidden = t !== 'weekly';
+  const type = schedRepeatSel.value;
+  schedDateInput.hidden = type !== 'once';
+  schedDaysEl.hidden = type !== 'weekly';
 }
 
 function resetSchedForm(prefill) {
@@ -117,7 +116,7 @@ function resetSchedForm(prefill) {
   schedRepeatSel.value = 'daily';
   setSelectedDays([1, 2, 3, 4, 5]);
   refreshRepeatFields();
-  schedSubmitBtn.textContent = '＋ 追加';
+  schedSubmitBtn.textContent = t('common.add');
   schedCancelBtn.hidden = true;
   schedFormMsg.hidden = true;
 }
@@ -136,7 +135,7 @@ function startSchedEdit(s) {
   schedWtEnable.checked = s.launch.worktree;
   schedWtPrefix.value = s.launch.branchPrefix;
   schedWtPrefix.disabled = !s.launch.worktree;
-  schedSubmitBtn.textContent = '保存';
+  schedSubmitBtn.textContent = t('common.save');
   schedCancelBtn.hidden = false;
   schedFormMsg.hidden = true;
   schedTimeInput.focus();
@@ -147,7 +146,7 @@ function renderSchedList() {
   if (!schedules.length) {
     const li = document.createElement('li');
     li.className = 'sched-empty';
-    li.textContent = 'スケジュールはありません。下のフォームから追加できます。';
+    li.textContent = t('sched.empty');
     schedListEl.appendChild(li);
     return;
   }
@@ -159,7 +158,7 @@ function renderSchedList() {
     const toggle = document.createElement('input');
     toggle.type = 'checkbox';
     toggle.checked = !!s.enabled;
-    toggle.title = s.enabled ? '無効にする' : '有効にする';
+    toggle.title = t(s.enabled ? 'sched.disable' : 'sched.enable');
     toggle.addEventListener('change', async () => {
       const res = await window.deck.schedulesToggle(s.id, toggle.checked);
       applySchedules(res);
@@ -177,20 +176,20 @@ function renderSchedList() {
     const meta = document.createElement('span');
     meta.className = 'preset-row-cmd';
     if (!repo) {
-      meta.textContent = '⚠ リポジトリ未登録';
+      meta.textContent = t('sched.noRepo');
       meta.classList.add('sched-warn');
-      meta.title = `${s.repoId} はリポジトリ一覧にありません`;
+      meta.title = t('sched.notInList', { repoId: s.repoId });
     } else {
-      meta.textContent = s.enabled ? `次回 ${fmtFireAt(s.nextFireAt)}` : '無効';
+      meta.textContent = s.enabled ? t('sched.next', { when: fmtFireAt(s.nextFireAt) }) : t('sched.disabled');
       meta.title = `${PRESETS[s.launch.presetKey] ? PRESETS[s.launch.presetKey].label : s.launch.presetKey}` +
-        (s.launch.worktree ? ' · worktree 隔離' : '');
+        (s.launch.worktree ? t('sched.wtMeta') : '');
     }
 
     const edit = document.createElement('button');
-    edit.type = 'button'; edit.className = 'ghost-btn'; edit.textContent = '編集';
+    edit.type = 'button'; edit.className = 'ghost-btn'; edit.textContent = t('common.edit');
     edit.addEventListener('click', () => startSchedEdit(s));
     const del = document.createElement('button');
-    del.type = 'button'; del.className = 'ghost-btn'; del.textContent = '削除';
+    del.type = 'button'; del.className = 'ghost-btn'; del.textContent = t('common.delete');
     del.addEventListener('click', async () => {
       const res = await window.deck.schedulesRemove(s.id);
       if (editingScheduleId === s.id) resetSchedForm();
@@ -250,7 +249,7 @@ schedForm.addEventListener('submit', async (e) => {
     ? await window.deck.schedulesUpdate(editingScheduleId, raw)
     : await window.deck.schedulesAdd(raw);
   if (res && res.ok === false) {
-    schedFormMsg.textContent = res.error || '保存に失敗しました';
+    schedFormMsg.textContent = res.error || t('sched.saveFailed');
     schedFormMsg.hidden = false;
     return;
   }
