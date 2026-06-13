@@ -154,6 +154,35 @@ test('uniqueBranch: sanitises spaces and illegal characters', () => {
   assert.equal(uniqueBranch('日本語のみ', 'claude', now), 'agentdeck/claude-20260612-0905');
 });
 
+test('uniqueBranch: per-schedule discriminator keeps same-minute firings apart (#9)', () => {
+  const now = at(2026, 6, 12, 9, 5);
+  // Two distinct schedules, same now + same prefix/preset (empty prefix) — would
+  // collide on 'agentdeck/claude-20260612-0905' without a discriminator.
+  const a = uniqueBranch('', 'claude', now, 'sched-aaa');
+  const b = uniqueBranch('', 'claude', now, 'sched-bbb');
+  assert.notEqual(a, b);
+  assert.ok(a.startsWith('agentdeck/claude-20260612-0905-'));
+  assert.ok(b.startsWith('agentdeck/claude-20260612-0905-'));
+});
+
+test('uniqueBranch: discriminator is deterministic (no RNG)', () => {
+  const now = at(2026, 6, 12, 9, 5);
+  assert.equal(
+    uniqueBranch('nightly', 'claude', now, 'sched-xyz'),
+    uniqueBranch('nightly', 'claude', now, 'sched-xyz'),
+  );
+});
+
+test('uniqueBranch: 4-arg result is branch-safe; no/empty discriminator is legacy form', () => {
+  const now = at(2026, 6, 12, 9, 5);
+  assert.match(uniqueBranch('nightly', 'claude', now, 'sched-xyz'), /^agentdeck\/[A-Za-z0-9._-]+$/);
+  // Absent / empty / non-string discriminator => identical to the 3-arg form.
+  const legacy = uniqueBranch('nightly', 'claude', now);
+  assert.equal(uniqueBranch('nightly', 'claude', now, ''), legacy);
+  assert.equal(uniqueBranch('nightly', 'claude', now, undefined), legacy);
+  assert.equal(uniqueBranch('nightly', 'claude', now, 42), legacy);
+});
+
 // ---- validate ---------------------------------------------------------------
 
 const NOW = at(2026, 6, 12, 8, 0);
