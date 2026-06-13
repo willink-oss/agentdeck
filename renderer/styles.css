@@ -12,7 +12,9 @@
   --accent-soft: #ffb454;
   --live: #6fcf6f;
   --danger: #e06c75;
-  --mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", ui-monospace, monospace;
+  /* Latin mono first, then system CJK fallbacks so zh-Hans / zh-Hant / ja / ko
+     UI text renders reliably (the xterm terminal sets its own font separately). */
+  --mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", ui-monospace, "Hiragino Sans", "PingFang SC", "PingFang TC", "Microsoft YaHei", "Noto Sans CJK SC", "Malgun Gothic", monospace;
   --radius: 8px;
 }
 

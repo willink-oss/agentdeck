@@ -32,7 +32,7 @@ test('setLang: ignores unsupported languages, keeps current', () => {
   I18n.setLang('en');
   I18n.setLang('zz');
   assert.equal(I18n.getLang(), 'en');
-  assert.deepEqual(I18n.langs(), ['ja', 'en']);
+  assert.deepEqual(I18n.langs(), ['ja', 'en', 'zhHans', 'zhHant', 'ko']);
 });
 
 test('resolveLocale: maps OS locale to a supported language, defaults to en', () => {
@@ -44,13 +44,51 @@ test('resolveLocale: maps OS locale to a supported language, defaults to en', ()
   assert.equal(I18n.resolveLocale(null), 'en');
 });
 
+test('resolveLocale: Korean + Chinese script/region routing (issue #10)', () => {
+  // Korean
+  assert.equal(I18n.resolveLocale('ko'), 'ko');
+  assert.equal(I18n.resolveLocale('ko-KR'), 'ko');
+  // Simplified: bare zh, explicit Hans, mainland China, Singapore
+  assert.equal(I18n.resolveLocale('zh'), 'zhHans');
+  assert.equal(I18n.resolveLocale('zh-CN'), 'zhHans');
+  assert.equal(I18n.resolveLocale('zh-Hans'), 'zhHans');
+  assert.equal(I18n.resolveLocale('zh-SG'), 'zhHans');
+  // Traditional: explicit Hant, Taiwan, Hong Kong, Macau
+  assert.equal(I18n.resolveLocale('zh-Hant'), 'zhHant');
+  assert.equal(I18n.resolveLocale('zh-TW'), 'zhHant');
+  assert.equal(I18n.resolveLocale('zh-HK'), 'zhHant');
+  assert.equal(I18n.resolveLocale('zh-MO'), 'zhHant');
+  // Unsupported still falls back to en
+  assert.equal(I18n.resolveLocale('fr'), 'en');
+});
+
 test('weekdayLabels: 7 labels per language, Sunday first', () => {
   assert.deepEqual(I18n.weekdayLabels('ja'), ['日', '月', '火', '水', '木', '金', '土']);
   assert.equal(I18n.weekdayLabels('en')[0], 'Su');
   assert.equal(I18n.weekdayLabels('en').length, 7);
 });
 
-test('dictionary completeness: every key has a non-empty ja AND en string', () => {
+test('LANGS: holds exactly the 5 expected locales with no duplicates', () => {
+  const expected = ['ja', 'en', 'zhHans', 'zhHant', 'ko'];
+  assert.deepEqual(I18n.langs(), expected);
+  assert.equal(new Set(I18n.LANGS).size, I18n.LANGS.length, 'LANGS must not contain duplicates');
+  for (const lang of expected) {
+    assert.ok(I18n.LANGS.includes(lang), `LANGS missing ${lang}`);
+  }
+});
+
+test('weekdayLabels: every lang has exactly 7 entries (Sunday first)', () => {
+  for (const lang of I18n.LANGS) {
+    const w = I18n.weekdayLabels(lang);
+    assert.ok(Array.isArray(w), `WEEKDAYS[${lang}] must be an array`);
+    assert.equal(w.length, 7, `WEEKDAYS[${lang}] must have 7 entries`);
+    for (const label of w) {
+      assert.ok(typeof label === 'string' && label, `WEEKDAYS[${lang}] has an empty entry`);
+    }
+  }
+});
+
+test('dictionary completeness: every key has a non-empty string for every LANG', () => {
   const missing = [];
   for (const [key, entry] of Object.entries(I18n.DICT)) {
     for (const lang of I18n.LANGS) {
@@ -60,13 +98,17 @@ test('dictionary completeness: every key has a non-empty ja AND en string', () =
   assert.deepEqual(missing, [], 'all keys must be fully translated: ' + missing.join(', '));
 });
 
-test('dictionary parity: ja and en share the same {param} placeholders per key', () => {
-  const ph = (s) => (s.match(/\{(\w+)\}/g) || []).sort().join(',');
+test('dictionary parity: every locale shares en\'s {param} placeholders per key', () => {
+  const ph = (s) => [...new Set((s.match(/\{(\w+)\}/g) || []))].sort().join(',');
   const mismatched = [];
   for (const [key, entry] of Object.entries(I18n.DICT)) {
-    if (ph(entry.ja) !== ph(entry.en)) mismatched.push(key);
+    const want = ph(entry.en);
+    for (const lang of I18n.LANGS) {
+      if (lang === 'en') continue;
+      if (ph(entry[lang]) !== want) mismatched.push(`${key}.${lang}`);
+    }
   }
-  assert.deepEqual(mismatched, [], 'ja/en placeholder sets must match: ' + mismatched.join(', '));
+  assert.deepEqual(mismatched, [], 'placeholder sets must match en: ' + mismatched.join(', '));
 });
 
 test('html parity: every data-i18n* key in index.html exists in the dictionary', () => {
