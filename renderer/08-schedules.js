@@ -39,8 +39,9 @@ window.deck.onScheduleFire(({ schedule }) => {
     name: L.name || `⏰ ${repo.name} ${schedule.time}`,
     cwd: repo.path,
     worktree: L.worktree,
-    // a fresh minute-stamped branch per firing, so repeats never collide (FR-4)
-    branch: L.worktree ? Schedule.uniqueBranch(L.branchPrefix, L.presetKey, Date.now()) : '',
+    // a minute-stamped branch made unique per schedule (id mixed in), so distinct
+    // schedules firing the same minute never collide (#9)
+    branch: L.worktree ? Schedule.uniqueBranch(L.branchPrefix, L.presetKey, Date.now(), schedule.id) : '',
   });
   notify(t('sched.fired', { repo: repo.name }));
 });
