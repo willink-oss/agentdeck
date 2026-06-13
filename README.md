@@ -148,7 +148,7 @@ agentdeck/
 │   └── styles.css
 ├── e2e/
 │   └── smoke.cjs        # CI 用ヘッドレス起動スモーク（3 OS・起動/preload/IPC/node-pty）
-└── test/                # node --test 用ユニットテスト（94 cases）
+└── test/                # node --test 用ユニットテスト（155 cases）
 ```
 
 ## 既知の割り切り
