@@ -156,7 +156,7 @@ function setAttention(s, id) {
   if (dot) { dot.classList.remove('live'); dot.classList.add('waiting'); }
   updateWaitingTitle();
   refreshSessionState(s);
-  if (!windowFocused) notify(s.name);
+  if (!windowFocused) notify(`${s.name} が入力待ちです`);
 }
 function clearAttention(s) {
   if (!s.attention) return;
@@ -172,11 +172,11 @@ function updateWaitingTitle() {
   for (const s of sessions.values()) if (s.attention) n++;
   document.title = n > 0 ? `(${n}) Agent Deck — needs attention` : 'Agent Deck';
 }
-function notify(name) {
+function notify(body) {
   try {
     if (typeof Notification === 'undefined') return;
     if (Notification.permission === 'granted') {
-      new Notification('Agent Deck', { body: `${name} が入力待ちです` });
+      new Notification('Agent Deck', { body });
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission();
     }

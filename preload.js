@@ -24,4 +24,11 @@ contextBridge.exposeInMainWorld('deck', {
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_e, p) => cb(p)),
   openExternal: (url) => ipcRenderer.send('update:open', url),
+  schedulesList: () => ipcRenderer.invoke('schedules:list'),
+  schedulesAdd: (raw) => ipcRenderer.invoke('schedules:add', raw),
+  schedulesUpdate: (id, patch) => ipcRenderer.invoke('schedules:update', { id, patch }),
+  schedulesRemove: (id) => ipcRenderer.invoke('schedules:remove', { id }),
+  schedulesToggle: (id, enabled) => ipcRenderer.invoke('schedules:toggle', { id, enabled }),
+  onScheduleFire: (cb) => ipcRenderer.on('schedule:fire', (_e, p) => cb(p)),
+  scheduleReady: () => ipcRenderer.send('schedule:ready'),
 });

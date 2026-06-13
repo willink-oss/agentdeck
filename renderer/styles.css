@@ -111,6 +111,12 @@ html, body {
 }
 .repo-item:hover .repo-remove { opacity: 1; }
 .repo-remove:hover { color: var(--danger); }
+.repo-sched {
+  flex: none; background: transparent; border: none; color: var(--text-faint);
+  cursor: pointer; font-size: 11px; line-height: 1; padding: 0 2px; opacity: 0; transition: opacity 0.12s, color 0.12s;
+}
+.repo-item:hover .repo-sched { opacity: 1; }
+.repo-sched:hover { color: var(--accent); }
 
 .repo-path {
   font-size: 9.5px; color: var(--text-faint);
@@ -551,6 +557,34 @@ select { appearance: none; cursor: pointer; }
   font-size: 11px; padding: 5px 11px; transition: all 0.12s;
 }
 #preset-submit:hover { border-color: var(--accent); }
+
+/* ---------- scheduled launches (⏰): reuses the preset modal shell ---------- */
+#sched-form {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px; border-top: 1px solid var(--line);
+}
+.sched-form-row { display: flex; gap: 8px; align-items: center; }
+.sched-form-row > input, .sched-form-row > select { flex: 1; min-width: 0; }
+.sched-form-row > input[type="time"], .sched-form-row > input[type="date"] { flex: none; width: auto; }
+.sched-days { display: flex; gap: 5px; }
+.sched-days[hidden] { display: none; }
+.day-chip {
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 999px;
+  color: var(--text-faint); cursor: pointer; font-family: var(--mono);
+  font-size: 11px; padding: 4px 9px; transition: all 0.12s;
+}
+.day-chip.on { color: var(--accent); border-color: rgba(240,136,62,0.55); background: rgba(240,136,62,0.10); }
+.sched-row input[type="checkbox"] { flex: none; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.sched-row.off .preset-row-name, .sched-row.off .sched-row-when { color: var(--text-faint); }
+.sched-row-when { font-size: 11px; color: var(--text-dim); flex: none; }
+.sched-warn { color: var(--accent-soft); }
+.sched-empty { padding: 14px 12px; font-size: 12px; color: var(--text-faint); text-align: center; list-style: none; }
+#sched-submit {
+  background: var(--bg-elev); border: 1px solid rgba(240,136,62,0.45); border-radius: 5px;
+  color: var(--accent); cursor: pointer; font-family: var(--mono);
+  font-size: 11px; padding: 5px 11px; transition: all 0.12s;
+}
+#sched-submit:hover { border-color: var(--accent); }
 
 /* in-terminal search bar (chord+F) */
 .term-search {
