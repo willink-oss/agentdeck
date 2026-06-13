@@ -172,11 +172,12 @@ function updateWaitingTitle() {
   for (const s of sessions.values()) if (s.attention) n++;
   document.title = n > 0 ? `(${n}) Agent Deck — needs attention` : 'Agent Deck';
 }
-function notify(body) {
+function notify(body, onClick) {
   try {
     if (typeof Notification === 'undefined') return;
     if (Notification.permission === 'granted') {
-      new Notification('Agent Deck', { body });
+      const n = new Notification('Agent Deck', { body });
+      if (onClick) n.onclick = onClick;
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission();
     }

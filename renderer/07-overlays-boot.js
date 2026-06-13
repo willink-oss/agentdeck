@@ -4,10 +4,18 @@
 const updateToast = $('#update-toast');
 const updateToastText = $('#update-toast-text');
 let updateUrl = '';
+let lastNotifiedUpdate = ''; // dedup: the 6h re-poll must not re-notify the same version
 function showUpdate(p) {
   updateUrl = p.url || '';
   updateToastText.textContent = `新しいバージョン v${p.latest} が利用できます（現在 v${p.current}）`;
   updateToast.hidden = false;
+  // also raise an OS notification (once per version) so an update is noticed even
+  // when the window is in the background; clicking it opens the download page
+  if (p.latest && p.latest !== lastNotifiedUpdate) {
+    lastNotifiedUpdate = p.latest;
+    notify(`新しいバージョン v${p.latest} が利用できます。クリックでダウンロードページを開きます。`,
+      () => { if (updateUrl) window.deck.openExternal(updateUrl); });
+  }
 }
 window.deck.onUpdateAvailable(showUpdate);
 $('#update-download').addEventListener('click', () => { if (updateUrl) window.deck.openExternal(updateUrl); });
