@@ -48,7 +48,9 @@ jobs:
       matrix:
         include:
           - os: macos-latest      # signed+notarized .dmg/.zip when MAC_CSC_LINK is set; else unsigned .dmg
-            build: ''             # mac build command is chosen at runtime (see step below)
+            build: 'true'         # mac build command is chosen at runtime (see step below); 'true'
+                                  # is a no-op that keeps the templated `else` branch non-empty
+                                  # (an empty `else … fi` is a bash syntax error — broke the mac job)
           - os: windows-latest     # NSIS .exe (x64) + latest.yml → in-app auto-update
             build: npm run dist:win
           - os: ubuntu-latest      # AppImage + .deb (x64) + latest-linux.yml → AppImage auto-update
