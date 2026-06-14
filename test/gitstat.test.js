@@ -60,6 +60,24 @@ test('parseWorktreeList: empty -> []', () => {
   assert.deepEqual(parseWorktreeList(''), []);
 });
 
+test('parseWorktreeList: preserves a trailing space in the worktree path', () => {
+  // git emits a space-terminated path unquoted; stripping it sent stat git to the
+  // wrong cwd. Only a trailing CR (CRLF) should be removed, never spaces.
+  const out = parseWorktreeList('worktree /repo/my dir \nbranch refs/heads/x\n');
+  assert.equal(out.length, 1);
+  assert.equal(out[0].path, '/repo/my dir ');
+  assert.equal(out[0].branch, 'x');
+});
+
+test('parseWorktreeList: tolerates CRLF line endings (Windows)', () => {
+  const text = 'worktree /repo\r\nbranch refs/heads/main\r\n\r\nworktree /repo/wt\r\nbranch refs/heads/x\r\n';
+  const out = parseWorktreeList(text);
+  assert.equal(out.length, 2);
+  assert.deepEqual(out[0], { path: '/repo', branch: 'main', detached: false, bare: false });
+  assert.equal(out[1].path, '/repo/wt');
+  assert.equal(out[1].branch, 'x');
+});
+
 test('formatStat: only non-zero parts, blank when clean', () => {
   assert.equal(formatStat({ insertions: 12, deletions: 3 }), '+12 -3');
   assert.equal(formatStat({ insertions: 5, deletions: 0 }), '+5');
