@@ -255,7 +255,7 @@ ipcMain.handle('pty:spawn', async (event, opts) => {
   return { ok: true, shell: shell || shellForHost(), cwd: effectiveCwd, git: gitMeta };
 });
 
-ipcMain.on('pty:input', (_e, { id, data }) => { const p = ptys.get(id); if (p) p.write(data); });
+ipcMain.on('pty:input', (_e, { id, data }) => { const p = ptys.get(id); if (p) { try { p.write(data); } catch (_) {} } });
 ipcMain.on('pty:resize', (_e, { id, cols, rows }) => {
   const p = ptys.get(id);
   if (p) { try { p.resize(Math.max(1, cols), Math.max(1, rows)); } catch (_) {} }
