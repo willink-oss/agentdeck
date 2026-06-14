@@ -13,9 +13,10 @@ test('defaultShell: macOS/Linux honour $SHELL', () => {
   assert.equal(defaultShell('linux', { SHELL: '/usr/bin/fish' }), '/usr/bin/fish');
 });
 
-test('defaultShell: falls back to /bin/zsh without $SHELL', () => {
-  assert.equal(defaultShell('darwin', {}), '/bin/zsh');
-  assert.equal(defaultShell('linux'), '/bin/zsh');
+test('defaultShell: falls back per-platform without $SHELL (zsh on macOS, sh elsewhere)', () => {
+  assert.equal(defaultShell('darwin', {}), '/bin/zsh');  // macOS ships zsh as the default shell
+  assert.equal(defaultShell('linux'), '/bin/sh');        // zsh isn't guaranteed on Linux; /bin/sh is universal
+  assert.equal(defaultShell('freebsd', {}), '/bin/sh');  // any other *nix → POSIX /bin/sh
 });
 
 test('sanitizeBranch: spaces become hyphens', () => {
