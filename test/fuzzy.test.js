@@ -33,6 +33,18 @@ test('word-boundary hit scores higher than mid-word', () => {
   assert.ok(score('a', 'abc') > score('b', 'abc'));  // start-of-string beats interior
 });
 
+test("every separator in BOUNDARY ('/ _-.') earns the word-boundary bonus", () => {
+  // a query char immediately after any boundary char must outscore the same
+  // char mid-word; previously only '-' and start-of-string were asserted, so a
+  // regression dropping a member (e.g. '.') from BOUNDARY would pass unnoticed.
+  for (const sep of ['/', ' ', '_', '-', '.']) {
+    assert.ok(score('c', `a${sep}c`) > score('c', 'ac'), `'${sep}' should be a word boundary`);
+  }
+  // '.' specifically matters for dotted file/repo names in the palette (a.js, release/v1.2.3)
+  assert.equal(score('j', 'a.js'), 4); // 1 base + 3 boundary bonus (after '.')
+  assert.equal(score('j', 'aj'), 1);   // mid-word: base only
+});
+
 test('returns positive number on match', () => {
   assert.ok(score('a', 'abc') > 0);
   assert.equal(typeof score('agent', 'my-agent-1'), 'number');
