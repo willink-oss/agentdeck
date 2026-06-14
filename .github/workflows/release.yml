@@ -47,11 +47,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest      # unsigned .dmg (arm64) — matches the current OSS distribution
-            build: npm run pack:unsigned
-          - os: windows-latest     # NSIS .exe (x64)
+          - os: macos-latest      # signed+notarized .dmg/.zip when MAC_CSC_LINK is set; else unsigned .dmg
+            build: ''             # mac build command is chosen at runtime (see step below)
+          - os: windows-latest     # NSIS .exe (x64) + latest.yml → in-app auto-update
             build: npm run dist:win
-          - os: ubuntu-latest      # AppImage + .deb (x64)
+          - os: ubuntu-latest      # AppImage + .deb (x64) + latest-linux.yml → AppImage auto-update
             build: npm run dist:linux
     steps:
       - uses: actions/checkout@v6
@@ -61,16 +61,54 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Build installers
-        run: ${{ matrix.build }}
-      - name: Attach installers to the draft release
+        shell: bash
+        env:
+          # macOS code signing / notarization — scoped to macos-latest ONLY (least
+          # privilege: never expose Apple creds to the win/linux jobs). Behavior:
+          #   * MAC_CSC_LINK unset                  -> UNSIGNED mac build (graceful
+          #     fallback; in-app auto-update off, users get the browser fallback).
+          #   * MAC_CSC_LINK set + all APPLE_* set   -> signed + notarized (auto-update ON).
+          #   * MAC_CSC_LINK set + any APPLE_* missing -> build fails fast (guard below),
+          #     instead of a cryptic notarization error.
+          # Set all 5 secrets together — see docs/macos-code-signing.md.
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            if [[ -n "${CSC_LINK}" ]]; then
+              if [[ -z "${APPLE_ID}" || -z "${APPLE_APP_SPECIFIC_PASSWORD}" || -z "${APPLE_TEAM_ID}" ]]; then
+                echo "ERROR: MAC_CSC_LINK is set but APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID are missing." >&2
+                echo "       All 5 mac signing secrets must be set together — see docs/macos-code-signing.md." >&2
+                exit 1
+              fi
+              echo "macOS: signing cert present -> signed + notarized build (in-app auto-update ENABLED)"
+              npm run dist
+            else
+              echo "macOS: MAC_CSC_LINK not set -> UNSIGNED build; in-app auto-update disabled (browser fallback)."
+              npm run pack:unsigned
+              # An unsigned mac app cannot self-install via Squirrel.Mac, so do NOT
+              # publish update metadata for it: drop the zip + yml, keep only the .dmg.
+              rm -f dist/latest-mac.yml dist/*.zip dist/*.zip.blockmap 2>/dev/null || true
+            fi
+          else
+            ${{ matrix.build }}
+          fi
+      - name: Attach installers + update metadata to the draft release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           shopt -s nullglob
+          # *.zip / *.blockmap / latest*.yml are the electron-updater feed; absent on
+          # unsigned mac (cleaned above) — nullglob makes the glob expand to nothing.
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
-            dist/*.dmg dist/*.exe dist/*.AppImage dist/*.deb
+            dist/*.dmg dist/*.exe dist/*.AppImage dist/*.deb \
+            dist/*.zip dist/*.blockmap dist/latest*.yml
 
   publish:
     name: publish release
