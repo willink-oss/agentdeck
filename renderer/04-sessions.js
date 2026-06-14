@@ -86,6 +86,9 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   const res = await window.deck.spawn({
     id, cwd: workdir, cols: term.cols, rows: term.rows,
     startupCommand: command,
+    // post-launch commands are preset-level: derived from the resolved preset so
+    // every entry point (form, chips, deck restore, schedule) gets them for free
+    initCommands: (preset.init && preset.init.length) ? preset.init : [],
     worktree: { enabled: wantWorktree, branch: wtName },
   });
 

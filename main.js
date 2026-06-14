@@ -141,9 +141,20 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// Post-launch init timing. The startup command is typed STARTUP_DELAY_MS after
+// spawn; any preset `init` commands (e.g. `/effort ultracode` for Claude) are
+// typed only once the agent has finished booting. We detect "booted" as output
+// going quiet for INIT_QUIET_MS — far more robust than a fixed delay across slow
+// cold starts — bounded by INIT_MAX_WAIT_MS so we always fire eventually, and
+// stagger multiple lines by INIT_STEP_MS so the REPL processes them in order.
+const STARTUP_DELAY_MS = 700;
+const INIT_QUIET_MS = 1200;
+const INIT_STEP_MS = 450;
+const INIT_MAX_WAIT_MS = 12_000;
+
 // ---- IPC: spawn (with optional git worktree isolation) ---------------------
 ipcMain.handle('pty:spawn', async (event, opts) => {
-  const { id, cwd, shell, cols, rows, startupCommand, worktree } = opts || {};
+  const { id, cwd, shell, cols, rows, startupCommand, initCommands, worktree } = opts || {};
   const home = os.homedir();
   let effectiveCwd = cwd && cwd.trim() ? cwd : home;
   let gitMeta = null;
@@ -184,19 +195,60 @@ ipcMain.handle('pty:spawn', async (event, opts) => {
 
   ptys.set(id, proc);
   const sender = event.sender;
+
+  // Post-launch init: type the preset's `init` commands once the agent settles.
+  const initLines = Array.isArray(initCommands)
+    ? initCommands.map((s) => String(s == null ? '' : s)).filter((s) => s.trim())
+    : [];
+  let initSettleTimer = null;
+  let initHardTimer = null;
+  const initWriteTimers = [];
+  let initDone = initLines.length === 0;
+  const clearInitTimers = () => {
+    clearTimeout(initSettleTimer);
+    clearTimeout(initHardTimer);
+    for (const tmr of initWriteTimers) clearTimeout(tmr);
+  };
+  const fireInit = () => {
+    if (initDone) return;
+    initDone = true;
+    clearTimeout(initSettleTimer);
+    clearTimeout(initHardTimer);
+    initLines.forEach((line, i) => {
+      initWriteTimers.push(setTimeout(() => { const live = ptys.get(id); if (live) live.write(line + '\r'); }, i * INIT_STEP_MS));
+    });
+  };
+  const bumpInit = () => { // (re)arm the quiescence timer on each chunk of boot output
+    if (initDone) return;
+    clearTimeout(initSettleTimer);
+    initSettleTimer = setTimeout(fireInit, INIT_QUIET_MS);
+  };
+
   // Guard every send: pty events arrive asynchronously, so a shell's final output /
   // exit can land AFTER the webContents died (closing the window kills the ptys in
   // window-all-closed, but their exit events fire a tick later; a renderer reload
   // orphans old sessions the same way). An unguarded send then throws
   // "Object has been destroyed" as an uncaught exception in the main process.
-  proc.onData((data) => { if (!sender.isDestroyed()) sender.send('pty:data', { id, data }); });
+  proc.onData((data) => {
+    if (!sender.isDestroyed()) sender.send('pty:data', { id, data });
+    bumpInit();
+  });
   proc.onExit(({ exitCode }) => {
+    initDone = true; // short-circuit any orphaned settle/hard timer that outraced this exit
+    clearInitTimers();
     if (!sender.isDestroyed()) sender.send('pty:exit', { id, exitCode });
     ptys.delete(id);
   });
 
   if (startupCommand && startupCommand.trim()) {
-    setTimeout(() => { const live = ptys.get(id); if (live) live.write(startupCommand + '\r'); }, 700);
+    setTimeout(() => { const live = ptys.get(id); if (live) live.write(startupCommand + '\r'); }, STARTUP_DELAY_MS);
+  }
+  if (!initDone) {
+    // start watching for quiet only after the startup command has been issued (so
+    // we wait on the agent booting, not the shell warming up); fire regardless once
+    // INIT_MAX_WAIT_MS passes, in case the agent's output never goes quiet
+    setTimeout(bumpInit, STARTUP_DELAY_MS + 300);
+    initHardTimer = setTimeout(fireInit, INIT_MAX_WAIT_MS);
   }
 
   return { ok: true, shell: shell || shellForHost(), cwd: effectiveCwd, git: gitMeta };

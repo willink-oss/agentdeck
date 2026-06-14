@@ -24,16 +24,33 @@ $('#update-dismiss').addEventListener('click', () => { updateToast.hidden = true
 const presetOverlay = $('#preset-overlay');
 const presetListEl = $('#preset-list');
 const presetForm = $('#preset-form');
+const presetFormTitle = $('#preset-form-title');
 const presetLabelInput = $('#preset-label-input');
 const presetCmdInput = $('#preset-cmd-input');
+const presetInitInput = $('#preset-init-input');
 const presetSubmitBtn = $('#preset-submit');
 const presetCancelBtn = $('#preset-cancel');
 const presetFormMsg = $('#preset-form-msg');
 let editingPresetKey = null;
+let editingBuiltin = false; // built-ins: only their post-launch init is editable (label/cmd are read-only)
 
+/** Re-apply edit-mode chrome (submit label + built-in init title) after a live
+ *  language switch — applyI18n() resets #preset-submit to its data-i18n default
+ *  ("Add") and never touches the imperatively-set title, so refresh both here. */
+function refreshPresetFormChrome() {
+  if (!editingPresetKey) return;
+  presetSubmitBtn.textContent = t('common.save');
+  if (editingBuiltin && !presetFormTitle.hidden) {
+    presetFormTitle.textContent = t('presets.initTitle', { label: (PRESETS[editingPresetKey] || {}).label || '' });
+  }
+}
 function resetPresetForm() {
   editingPresetKey = null;
+  editingBuiltin = false;
   presetForm.reset();
+  presetLabelInput.disabled = false;
+  presetCmdInput.disabled = false;
+  presetFormTitle.hidden = true;
   presetSubmitBtn.textContent = t('common.add');
   presetCancelBtn.hidden = true;
   presetFormMsg.hidden = true;
@@ -49,9 +66,13 @@ function renderPresetList() {
     cmd.className = 'preset-row-cmd'; cmd.textContent = p.cmd || '(shell)';
     li.append(nm, cmd);
     if (Presets.isBuiltin(key)) {
+      // built-ins are read-only except their post-launch init commands
+      const initBtn = document.createElement('button');
+      initBtn.type = 'button'; initBtn.className = 'ghost-btn'; initBtn.textContent = t('presets.editInit');
+      initBtn.addEventListener('click', () => startInitEdit(key));
       const tag = document.createElement('span');
       tag.className = 'preset-row-tag'; tag.textContent = t('presets.builtin');
-      li.appendChild(tag);
+      li.append(initBtn, tag);
     } else {
       const edit = document.createElement('button');
       edit.type = 'button'; edit.className = 'ghost-btn'; edit.textContent = t('common.edit');
@@ -61,6 +82,14 @@ function renderPresetList() {
       del.addEventListener('click', () => deletePreset(key));
       li.append(edit, del);
     }
+    // post-launch init preview, wrapped to its own line (only when configured)
+    if (p.init && p.init.length) {
+      const init = document.createElement('span');
+      init.className = 'preset-row-init';
+      init.textContent = '↳ ' + p.init.join(' · ');
+      init.title = p.init.join('\n');
+      li.appendChild(init);
+    }
     presetListEl.appendChild(li);
   }
 }
@@ -68,12 +97,35 @@ function startPresetEdit(key) {
   const c = customPresets.find((p) => p.key === key);
   if (!c) return;
   editingPresetKey = key;
+  editingBuiltin = false;
+  presetLabelInput.disabled = false;
+  presetCmdInput.disabled = false;
   presetLabelInput.value = c.label;
   presetCmdInput.value = c.cmd;
+  presetInitInput.value = (presetInit[key] || []).join('\n');
+  presetFormTitle.hidden = true;
   presetSubmitBtn.textContent = t('common.save');
   presetCancelBtn.hidden = false;
   presetFormMsg.hidden = true;
   presetLabelInput.focus();
+}
+/** Edit only a built-in's post-launch init commands; its label/cmd stay read-only. */
+function startInitEdit(key) {
+  const p = PRESETS[key];
+  if (!p) return;
+  editingPresetKey = key;
+  editingBuiltin = true;
+  presetLabelInput.value = p.label;
+  presetCmdInput.value = p.cmd;
+  presetLabelInput.disabled = true;
+  presetCmdInput.disabled = true;
+  presetInitInput.value = (presetInit[key] || []).join('\n');
+  presetFormTitle.textContent = t('presets.initTitle', { label: p.label });
+  presetFormTitle.hidden = false;
+  presetSubmitBtn.textContent = t('common.save');
+  presetCancelBtn.hidden = false;
+  presetFormMsg.hidden = true;
+  presetInitInput.focus();
 }
 function deletePreset(key) {
   const c = customPresets.find((p) => p.key === key);
@@ -81,23 +133,39 @@ function deletePreset(key) {
   if (!confirm(t('presets.confirmDelete', { label: c.label }))) return;
   customPresets = customPresets.filter((p) => p.key !== key);
   saveCustomPresets();
+  setPresetInit(key, []); // drop any init so a later same-slug preset can't inherit it
   if (editingPresetKey === key) resetPresetForm();
   rebuildPresetUI();
   renderPresetList();
 }
+/** Store (or clear) a preset's post-launch init commands and persist the map. */
+function setPresetInit(key, lines) {
+  if (lines && lines.length) presetInit[key] = lines;
+  else delete presetInit[key];
+  savePresetInit();
+}
 presetForm.addEventListener('submit', (e) => {
   e.preventDefault();
-  const v = Presets.validate(presetLabelInput.value, presetCmdInput.value);
-  if (!v.ok) { presetFormMsg.textContent = v.error; presetFormMsg.hidden = false; return; }
-  if (editingPresetKey) {
-    // edits keep the key so saved decks / live sessions stay attached to it
-    const c = customPresets.find((p) => p.key === editingPresetKey);
-    if (c) { c.label = v.label; c.cmd = v.cmd; }
+  const init = Presets.parseInit(presetInitInput.value);
+  if (editingBuiltin) {
+    // built-in: only its init is editable; label/cmd are fixed in lib/presets.js
+    setPresetInit(editingPresetKey, init);
   } else {
-    const key = Presets.keyFor(v.label, Object.keys(PRESETS));
-    customPresets.push({ key, label: v.label, cmd: v.cmd });
+    const v = Presets.validate(presetLabelInput.value, presetCmdInput.value);
+    if (!v.ok) { presetFormMsg.textContent = v.error; presetFormMsg.hidden = false; return; }
+    if (editingPresetKey) {
+      // edits keep the key so saved decks / live sessions stay attached to it
+      const c = customPresets.find((p) => p.key === editingPresetKey);
+      if (c) { c.label = v.label; c.cmd = v.cmd; }
+      saveCustomPresets();
+      setPresetInit(editingPresetKey, init);
+    } else {
+      const key = Presets.keyFor(v.label, Object.keys(PRESETS));
+      customPresets.push({ key, label: v.label, cmd: v.cmd });
+      saveCustomPresets();
+      setPresetInit(key, init);
+    }
   }
-  saveCustomPresets();
   resetPresetForm();
   rebuildPresetUI();
   renderPresetList();

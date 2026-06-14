@@ -1,10 +1,13 @@
 'use strict';
 
 /* Presets. Built-ins live in lib/presets.js; user-defined presets are merged
- * in from localStorage (custom list only). `cmd` is auto-typed + run on start. */
+ * in from localStorage (custom list only). `cmd` is auto-typed + run on start;
+ * `init` (post-launch commands, kept per preset key in a separate map) is typed
+ * into the agent once it has booted. */
 const Presets = window.Presets;
 let customPresets = loadCustomPresets();
-let PRESETS = Presets.merge(customPresets);
+let presetInit = loadPresetInit();
+let PRESETS = Presets.merge(customPresets, presetInit);
 
 function loadCustomPresets() {
   try { return Presets.normalizeCustom(JSON.parse(localStorage.getItem(Presets.KEY) || '[]')); }
@@ -12,6 +15,21 @@ function loadCustomPresets() {
 }
 function saveCustomPresets() {
   try { localStorage.setItem(Presets.KEY, JSON.stringify(customPresets)); } catch (_) {}
+}
+function loadPresetInit() {
+  try {
+    const map = Presets.normalizeInitMap(JSON.parse(localStorage.getItem(Presets.KEY_INIT) || '{}'));
+    // drop init for keys that are neither a built-in nor a surviving custom preset
+    // (e.g. a custom preset normalizeCustom silently dropped) so the map self-heals
+    // instead of accumulating dead keys; the next savePresetInit() persists the prune
+    for (const key of Object.keys(map)) {
+      if (!Presets.isBuiltin(key) && !customPresets.some((p) => p.key === key)) delete map[key];
+    }
+    return map;
+  } catch (_) { return {}; }
+}
+function savePresetInit() {
+  try { localStorage.setItem(Presets.KEY_INIT, JSON.stringify(presetInit)); } catch (_) {}
 }
 
 const TERM_THEME = {
@@ -141,6 +159,7 @@ function setLanguage(lang) {
   updateWaitingTitle();    // document.title
   renderSchedList();       // schedule modal list (if populated)
   if (typeof renderPresetList === 'function') renderPresetList();
+  if (typeof refreshPresetFormChrome === 'function') refreshPresetFormChrome(); // re-apply edit-mode title/button text
 }
 initLang();
 applyI18n(); // static chrome is in the DOM already (scripts load at body end)
