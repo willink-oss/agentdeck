@@ -68,9 +68,11 @@ test('normalizeCustom: round-trips its own output', () => {
 test('merge: built-ins always present and never overridden', () => {
   const merged = P.merge([{ key: 'custom-aider', label: 'Aider', cmd: 'aider' }]);
   assert.equal(merged.shell.label, 'Plain shell');
-  assert.deepEqual(merged['custom-aider'], { label: 'Aider', cmd: 'aider', badge: 'AIDER' });
+  assert.deepEqual(merged['custom-aider'], { label: 'Aider', cmd: 'aider', badge: 'AIDER', init: [] });
   // built-ins keep their explicit badges
   assert.equal(merged.antigravity.badge, 'ANTIGRAVITY');
+  // every entry carries an init array (empty when unconfigured)
+  assert.deepEqual(merged.claude.init, []);
   // order: built-ins first, customs after
   assert.deepEqual(Object.keys(merged).slice(0, 5), Object.keys(P.BUILTINS));
 });
@@ -80,6 +82,63 @@ test('merge: tolerates an un-normalized custom list', () => {
   assert.equal(merged.claude.cmd, 'claude'); // built-in untouched
   assert.ok(merged['custom-a']);
   assert.equal(P.merge(undefined).claude.label, 'Claude Code');
+  assert.deepEqual(P.merge(undefined).claude.init, []); // no init map -> empty arrays, no throw
+});
+
+test('merge: folds init commands onto built-in and custom presets by key', () => {
+  const merged = P.merge(
+    [{ key: 'custom-aider', label: 'Aider', cmd: 'aider' }],
+    { claude: ['/effort ultracode'], 'custom-aider': ['/help'], 'no-such': ['x'] });
+  assert.deepEqual(merged.claude.init, ['/effort ultracode']); // built-in init override
+  assert.deepEqual(merged['custom-aider'].init, ['/help']);
+  assert.deepEqual(merged.antigravity.init, []);              // unconfigured built-in stays empty
+  // an init entry for an unknown key is simply ignored (no phantom preset created)
+  assert.ok(!merged['no-such']);
+});
+
+test('merge: a string init value is split into lines (loader-side tolerance)', () => {
+  const merged = P.merge([], { claude: '/effort ultracode\n/model opus' });
+  assert.deepEqual(merged.claude.init, ['/effort ultracode', '/model opus']);
+});
+
+test('parseInit: splits, trims, drops blanks, caps count and length', () => {
+  assert.deepEqual(P.parseInit('  /effort ultracode \n\n /model opus '), ['/effort ultracode', '/model opus']);
+  assert.deepEqual(P.parseInit(['a', '', '  ', 'b']), ['a', 'b']);
+  assert.deepEqual(P.parseInit(''), []);
+  assert.deepEqual(P.parseInit(null), []);
+  assert.deepEqual(P.parseInit(undefined), []);
+  // count cap
+  const many = Array.from({ length: P.MAX_INIT_LINES + 5 }, (_, i) => 'cmd' + i);
+  assert.equal(P.parseInit(many).length, P.MAX_INIT_LINES);
+  // per-line length cap
+  assert.equal(P.parseInit('x'.repeat(P.INIT_LINE_MAX + 50))[0].length, P.INIT_LINE_MAX);
+  // CRLF handled
+  assert.deepEqual(P.parseInit('a\r\nb'), ['a', 'b']);
+  // a lone CR (no LF) is also a separator — one line can't fan out into two REPL commands
+  assert.deepEqual(P.parseInit('foo\rbar'), ['foo', 'bar']);
+  // and an array element carrying an embedded separator is split too
+  assert.deepEqual(P.parseInit(['a\rb', 'c']), ['a', 'b', 'c']);
+  // residual control chars (ESC / BEL / etc.) are stripped, never written to the PTY
+  assert.deepEqual(P.parseInit('a\x1b[31mb\x07'), ['a[31mb']);
+});
+
+test('parseInit: idempotent (re-parsing its own output is a no-op)', () => {
+  const once = P.parseInit('  /effort ultracode \n /model opus ');
+  assert.deepEqual(P.parseInit(once), once);
+});
+
+test('normalizeInitMap: keeps clean lists, drops empties and non-objects', () => {
+  assert.deepEqual(P.normalizeInitMap(null), {});
+  assert.deepEqual(P.normalizeInitMap('nope'), {});
+  assert.deepEqual(P.normalizeInitMap([1, 2]), {}); // arrays have no own string keys here
+  assert.deepEqual(
+    P.normalizeInitMap({ claude: [' /effort ultracode ', ''], antigravity: ['  ', ''], codex: 'go\n' }),
+    { claude: ['/effort ultracode'], codex: ['go'] }); // antigravity normalizes to empty -> dropped
+});
+
+test('KEY_INIT: distinct storage key from the custom-preset list', () => {
+  assert.equal(P.KEY_INIT, 'agentdeck.presetInit');
+  assert.notEqual(P.KEY_INIT, P.KEY);
 });
 
 test('chipKeys: four agent built-ins (no shell) then customs', () => {

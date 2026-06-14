@@ -171,8 +171,11 @@
       </div>
       <ul id="preset-list" class="preset-list"></ul>
       <form id="preset-form" autocomplete="off">
+        <div id="preset-form-title" class="preset-form-title" hidden></div>
         <input id="preset-label-input" type="text" spellcheck="false" data-i18n-ph="presets.labelPh" placeholder="表示名（例: Aider）" />
         <input id="preset-cmd-input" type="text" spellcheck="false" data-i18n-ph="presets.cmdPh" placeholder="起動コマンド（例: aider）" />
+        <textarea id="preset-init-input" class="preset-init-input" rows="2" spellcheck="false" data-i18n-ph="presets.initPh" placeholder="起動後に自動入力（1行1コマンド・例: /effort ultracode）"></textarea>
+        <span class="field-hint preset-init-hint" data-i18n="presets.initHint">起動後、エージェント起動が落ち着いてから1行ずつ自動入力されます</span>
         <div class="preset-form-actions">
           <button type="submit" id="preset-submit" data-i18n="common.add">＋ 追加</button>
           <button type="button" id="preset-cancel" class="ghost-btn" data-i18n="common.cancel" hidden>キャンセル</button>
