@@ -62,6 +62,18 @@ test('resolveLocale: Korean + Chinese script/region routing (issue #10)', () => 
   assert.equal(I18n.resolveLocale('fr'), 'en');
 });
 
+test('resolveLocale: explicit zh Hans script wins over a Traditional region', () => {
+  // BCP-47: the script subtag is more specific than the region, so an explicit
+  // Hans stays Simplified even when the region is Traditional (HK/TW/MO).
+  assert.equal(I18n.resolveLocale('zh-Hans-HK'), 'zhHans');
+  assert.equal(I18n.resolveLocale('zh-Hans-TW'), 'zhHans');
+  assert.equal(I18n.resolveLocale('zh-Hans-MO'), 'zhHans');
+  // regression guards: Hant region/script still Traditional; mainland still Simplified
+  assert.equal(I18n.resolveLocale('zh-Hant-CN'), 'zhHant');
+  assert.equal(I18n.resolveLocale('zh-Hant'), 'zhHant');
+  assert.equal(I18n.resolveLocale('zh-CN'), 'zhHans');
+});
+
 test('weekdayLabels: 7 labels per language, Sunday first', () => {
   assert.deepEqual(I18n.weekdayLabels('ja'), ['日', '月', '火', '水', '木', '金', '土']);
   assert.equal(I18n.weekdayLabels('en')[0], 'Su');
