@@ -92,6 +92,10 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
     worktree: { enabled: wantWorktree, branch: wtName },
   });
 
+  // the pane can be killed (kill button / chord+W / restore) during the spawn await;
+  // killSession() then disposed `term` and removed the session — bail before touching them
+  if (!sessions.has(id)) return;
+
   if (!res || !res.ok) {
     term.write(`\r\n\x1b[31m[failed: ${res ? res.error : 'unknown'}]\x1b[0m\r\n`);
     setExited(id);
