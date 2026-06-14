@@ -49,12 +49,20 @@ test('sanitizeBranch: emits a git-valid ref (no "..", trailing ".", or ".lock")'
   assert.equal(sanitizeBranch('feature.'), 'feature'); // trailing "." trimmed
   assert.equal(sanitizeBranch('x.lock'), 'x');         // ".lock" suffix stripped
   assert.equal(sanitizeBranch('...'), 'session');      // collapses+trims to empty -> fallback
+  assert.equal(sanitizeBranch('a.lock.lock'), 'a');    // stacked ".lock" stripped (until stable)
+  assert.equal(sanitizeBranch('foo//bar'), 'foo/bar'); // consecutive slashes collapsed
+  assert.equal(sanitizeBranch('a/:/b'), 'a/b');        // emptied interior component can't leave "//"
+  assert.equal(sanitizeBranch('wip/.scratch'), 'wip/scratch'); // dot-leading component fixed
   // structural invariant: every output is a syntactically valid branch ref
-  for (const inp of ['a..b', 'feature.', 'x.lock', 'release/v1.2.3', 'feat/x~y^z', 'wip..', 'x.lock/y']) {
+  for (const inp of ['a..b', 'feature.', 'x.lock', 'release/v1.2.3', 'feat/x~y^z', 'wip..', 'x.lock/y',
+    'a.lock.lock', 'a.lock.lock.lock', 'foo//bar', 'foo/.hidden', 'a/:/b', 'fix/~/x', 'wip/.scratch',
+    'x/./y', 'foo/./bar/./baz', 'a/.lock/b', '/.', '//', '.lock.lock']) {
     const out = sanitizeBranch(inp);
     assert.match(out, /^[A-Za-z0-9._\/-]+$/, `${inp} -> ${out}`);
     assert.ok(!out.includes('..'), `${inp} -> ${out} must not contain ".."`);
+    assert.ok(!out.includes('//'), `${inp} -> ${out} must not contain "//"`);
     assert.ok(!/\.$/.test(out), `${inp} -> ${out} must not end with "."`);
+    assert.ok(!/(^|\/)\./.test(out), `${inp} -> ${out} must not have a component starting with "."`);
     assert.ok(!/\.lock(?:$|\/)/.test(out), `${inp} -> ${out} must not have a ".lock" suffix`);
   }
 });
