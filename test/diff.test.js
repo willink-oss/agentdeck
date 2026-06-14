@@ -30,6 +30,29 @@ test('classifyLine: +++/--- win over +/-', () => {
   assert.equal(classifyLine('--- a/file'), 'dl dl-file');
 });
 
+test('classifyLine: body lines whose content starts with "-- "/"++ " are del/add, not headers', () => {
+  // a deleted line whose content is the "-- " signature delimiter is "--- " in the diff
+  assert.equal(classifyLine('--- '), 'dl dl-del');
+  assert.equal(classifyLine('+++ x'), 'dl dl-add');
+  assert.equal(classifyLine('--- foo'), 'dl dl-del');
+  // genuine new/deleted-file headers (target /dev/null) still classify as file
+  assert.equal(classifyLine('--- /dev/null'), 'dl dl-file');
+  assert.equal(classifyLine('+++ /dev/null'), 'dl dl-file');
+});
+
+test('diffToSegments: a "-- " deletion body line gets del class + word-level parts (not header)', () => {
+  const segs = diffToSegments([
+    'diff --git a/sig.txt b/sig.txt',
+    '@@ -1 +1 @@',
+    '--- ',     // deleting a line whose content is the "-- " delimiter
+    '+-- bye',
+  ].join('\n'), []);
+  assert.equal(segs[2].cls, 'dl dl-del');          // was 'dl dl-file' (the bug)
+  assert.equal(segs[3].cls, 'dl dl-add');
+  assert.ok(Array.isArray(segs[2].parts));         // now paired for word-level highlight
+  assert.equal(segs[2].parts[0].text, '-');        // leading marker preserved
+});
+
 test('diffToSegments: parses a small diff', () => {
   const diff = [
     'diff --git a/a.txt b/a.txt',
