@@ -1,24 +1,67 @@
 'use strict';
 
-// ---- update notification (main checks the feed; we just surface it) ---------
+// ---- update: in-app download/install (electron-updater) + browser fallback ---
+// State machine driven by main's IPC events:
+//   available  → button "ダウンロード"     (in-app)  / "ダウンロードページを開く" (feed/dev)
+//   downloading→ button "ダウンロード中 N%"
+//   downloaded → button "再起動してインストール" → quitAndInstall()
 const updateToast = $('#update-toast');
 const updateToastText = $('#update-toast-text');
-let updateUrl = '';
-let lastNotifiedUpdate = ''; // dedup: the 6h re-poll must not re-notify the same version
+const updateBtn = $('#update-download');
+let updateUrl = '';            // browser fallback link (feed / dev mode)
+let updateCanInApp = false;    // true → electron-updater can download+install in-app
+let updatePhase = 'idle';      // idle | available | downloading | downloaded
+let lastNotifiedUpdate = '';   // dedup: the 6h re-poll must not re-notify the same version
+
 function showUpdate(p) {
   updateUrl = p.url || '';
+  updateCanInApp = !!p.canInApp;
+  updatePhase = 'available';
   updateToastText.textContent = t('update.toast', { latest: p.latest, current: p.current });
+  updateBtn.textContent = t(updateCanInApp ? 'update.download' : 'update.openPage');
   updateToast.hidden = false;
-  // also raise an OS notification (once per version) so an update is noticed even
-  // when the window is in the background; clicking it opens the download page
+  // OS notification once per version so a backgrounded window still notices the update
   if (p.latest && p.latest !== lastNotifiedUpdate) {
     lastNotifiedUpdate = p.latest;
-    notify(t('update.notif', { latest: p.latest }),
-      () => { if (updateUrl) window.deck.openExternal(updateUrl); });
+    notify(t(updateCanInApp ? 'update.notif' : 'update.notifBrowser', { latest: p.latest }),
+      () => { updateToast.hidden = false; if (!updateCanInApp && updateUrl) window.deck.openExternal(updateUrl); });
   }
 }
+
+async function onUpdateClick() {
+  if (updatePhase === 'downloaded') { window.deck.installUpdate(); return; } // restart & install
+  if (updatePhase === 'downloading') return;                                  // already in flight
+  if (updateCanInApp) {
+    updatePhase = 'downloading';
+    updateBtn.textContent = t('update.downloading', { percent: 0 });
+    const r = await window.deck.downloadUpdate();
+    if (r && r.ok === false) onUpdateError();        // revert to a browser link on failure
+  } else if (updateUrl) {
+    window.deck.openExternal(updateUrl);             // feed / dev → browser
+  }
+}
+
+function onUpdateError() {
+  // Only meaningful once an in-app download has started; discovery-time errors
+  // (e.g. a release without update metadata) are handled by main's feed fallback.
+  if (updatePhase !== 'downloading') return;
+  updatePhase = 'available';
+  updateCanInApp = false;
+  if (!updateUrl) updateUrl = 'https://github.com/willink-oss/agentdeck/releases';
+  updateBtn.textContent = t('update.openPage');
+}
+
 window.deck.onUpdateAvailable(showUpdate);
-$('#update-download').addEventListener('click', () => { if (updateUrl) window.deck.openExternal(updateUrl); });
+window.deck.onUpdateProgress((p) => {
+  updatePhase = 'downloading';
+  updateBtn.textContent = t('update.downloading', { percent: (p && p.percent != null) ? p.percent : 0 });
+});
+window.deck.onUpdateDownloaded(() => {
+  updatePhase = 'downloaded';
+  updateBtn.textContent = t('update.install');
+});
+window.deck.onUpdateError(onUpdateError);
+updateBtn.addEventListener('click', onUpdateClick);
 $('#update-dismiss').addEventListener('click', () => { updateToast.hidden = true; });
 // ---- agent preset manager (⚙): add / edit / delete user-defined presets -----
 const presetOverlay = $('#preset-overlay');

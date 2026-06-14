@@ -50,10 +50,24 @@
     "asarUnpack": [
       "**/node_modules/node-pty/**"
     ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "willink-oss",
+        "repo": "agentdeck"
+      }
+    ],
     "mac": {
       "target": [
         {
           "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "arm64",
             "x64"
@@ -112,6 +126,7 @@
     }
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "node-pty": "^1.0.0",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",

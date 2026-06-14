@@ -13,6 +13,7 @@ const Repos = require('./lib/repos');
 const GitStat = require('./lib/gitstat');
 const Version = require('./lib/version');
 const Schedule = require('./lib/schedule');
+const { autoUpdater } = require('electron-updater');
 
 const pexec = promisify(execFile);
 
@@ -443,11 +444,39 @@ ipcMain.handle('app:info', () => ({
 ipcMain.handle('clipboard:write', (_e, text) => { clipboard.writeText(String(text == null ? '' : text)); return true; });
 ipcMain.handle('clipboard:read', () => clipboard.readText());
 
-// ---- update check (manual distribution: we only check the feed + notify) ----
+// ---- update: in-app download+install via electron-updater, feed fallback ----
+// Strategy:
+//   * Packaged builds use electron-updater (Squirrel.Mac / NSIS / AppImage) to
+//     download AND install the update inside the app — no browser round-trip.
+//   * Dev runs (electron .) and anything electron-updater can't handle (older
+//     releases with no update metadata, network/signature errors, or an UNSIGNED
+//     mac build where Squirrel.Mac refuses to self-install) degrade gracefully to
+//     the lightweight feed checker below, which notifies with a browser link.
 const RELEASES_PAGE = 'https://github.com/willink-oss/agentdeck/releases';
 const UPDATE_FEED = process.env.AGENTDECK_UPDATE_FEED
   || 'https://api.github.com/repos/willink-oss/agentdeck/releases/latest';
 const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000; // re-check every 6h while running
+
+// electron-updater only works in a packaged app; in dev it throws "not packed".
+const CAN_AUTO_UPDATE = app.isPackaged;
+const liveWindow = () => { const w = BrowserWindow.getAllWindows()[0]; return w && !w.isDestroyed() ? w : null; };
+const sendUpdate = (channel, payload) => { const w = liveWindow(); if (w) w.webContents.send(channel, payload); };
+const stripV = (v) => String(v == null ? '' : v).replace(/^v/i, '');
+
+autoUpdater.autoDownload = false;        // download only after the user clicks ダウンロード
+autoUpdater.autoInstallOnAppQuit = true; // if downloaded but not yet installed, apply on next quit
+autoUpdater.on('update-available', (info) => {
+  sendUpdate('update:available', { latest: stripV(info && info.version), current: app.getVersion(), canInApp: true });
+});
+autoUpdater.on('download-progress', (p) => {
+  sendUpdate('update:progress', { percent: Math.round((p && p.percent) || 0) });
+});
+autoUpdater.on('update-downloaded', (info) => {
+  sendUpdate('update:downloaded', { latest: stripV(info && info.version) });
+});
+autoUpdater.on('error', (err) => {
+  sendUpdate('update:error', { message: String((err && err.message) || err) });
+});
 
 function fetchJson(url, redirects) {
   return new Promise((resolve, reject) => {
@@ -466,25 +495,39 @@ function fetchJson(url, redirects) {
   });
 }
 
-/** Fetch the latest published version and, if newer than this build, notify the renderer. */
-async function checkForUpdate(win) {
+/** Feed fallback: notify (with a browser link) when a newer version exists but in-app update isn't usable. */
+async function feedCheck() {
   const current = app.getVersion();
   try {
     const rel = await fetchJson(UPDATE_FEED);
     const latestRaw = rel && (rel.tag_name || rel.name);
     const url = (rel && rel.html_url) || RELEASES_PAGE;
     if (latestRaw && Version.isNewer(latestRaw, current)) {
-      const latest = String(latestRaw).replace(/^v/i, '');
-      if (win && !win.isDestroyed()) win.webContents.send('update:available', { latest, url, current });
-      return { ok: true, update: true, latest, url, current };
+      sendUpdate('update:available', { latest: stripV(latestRaw), current, url, canInApp: false });
+      return { ok: true, update: true, latest: stripV(latestRaw), url, current };
     }
-    return { ok: true, update: false, current, latest: latestRaw ? String(latestRaw).replace(/^v/i, '') : null };
+    return { ok: true, update: false, current, latest: latestRaw ? stripV(latestRaw) : null };
   } catch (err) {
     return { ok: false, error: String((err && err.message) || err), current };
   }
 }
 
-ipcMain.handle('update:check', () => checkForUpdate(BrowserWindow.getAllWindows()[0]));
+/** Check for an update: electron-updater first (packaged), feed fallback otherwise. */
+async function checkForUpdate() {
+  if (CAN_AUTO_UPDATE) {
+    try { await autoUpdater.checkForUpdates(); return { ok: true }; }
+    catch (_) { return feedCheck(); } // no metadata yet / unreachable feed → browser link
+  }
+  return feedCheck();
+}
+
+ipcMain.handle('update:check', () => checkForUpdate());
+ipcMain.handle('update:download', async () => {
+  if (!CAN_AUTO_UPDATE) return { ok: false, reason: 'not-packaged' };
+  try { await autoUpdater.downloadUpdate(); return { ok: true }; }
+  catch (err) { sendUpdate('update:error', { message: String((err && err.message) || err) }); return { ok: false }; }
+});
+ipcMain.on('update:install', () => { try { autoUpdater.quitAndInstall(); } catch (_) {} });
 ipcMain.on('update:open', (_e, url) => {
   shell.openExternal(typeof url === 'string' && /^https:\/\//.test(url) ? url : RELEASES_PAGE);
 });
@@ -493,5 +536,5 @@ function scheduleUpdateChecks() {
   // Resolve the live window each tick — on macOS the first window can be closed and
   // recreated (app.activate), so a captured reference would go stale. The renderer
   // triggers the initial check itself on boot (window.deck.checkUpdate()).
-  setInterval(() => checkForUpdate(BrowserWindow.getAllWindows()[0]), UPDATE_INTERVAL_MS);
+  setInterval(() => { checkForUpdate(); }, UPDATE_INTERVAL_MS);
 }

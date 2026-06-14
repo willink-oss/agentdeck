@@ -6,11 +6,15 @@ Agent Deck は **electron-builder** でパッケージし、**GitHub Releases** 
 
 | OS | 成果物 | 署名 |
 |---|---|---|
-| macOS (arm64 / x64) | `.dmg` ×2（`-arm64` / `-x64`） | **未署名**（`pack:unsigned`） |
-| Windows (x64) | `.exe`（NSIS インストーラ） | 未署名 |
-| Linux (x64) | `.AppImage` / `.deb` | 未署名 |
+| macOS (arm64 / x64) | `.dmg` + `.zip` ×2（zip = 自動更新用） | **署名+notarize**（`MAC_CSC_LINK` 等 secret 設定時）／未設定時は未署名 `.dmg` のみ |
+| Windows (x64) | `.exe`（NSIS）+ `latest.yml` | 未署名（自動更新は動作・初回のみ SmartScreen 警告） |
+| Linux (x64) | `.AppImage` / `.deb` + `latest-linux.yml` | 未署名（AppImage 自動更新は動作） |
 
-更新はアプリ内チェック（feed = GitHub Releases）。
+更新は **electron-updater でアプリ内 DL→インストールまで完結**（feed = GitHub Releases の `latest*.yml`）。
+
+- **macOS は署名が必須** — 未署名だと Squirrel.Mac が自動インストールを拒否するため、自動でブラウザ誘導にフォールバックする。署名設定手順（CEO 作業・GitHub Secrets 5 つ）: [`docs/macos-code-signing.md`](docs/macos-code-signing.md)。
+- **Windows / Linux(AppImage)** は未署名でもアプリ内更新が機能する。
+- **dev 実行（`npm start`）/ メタデータ無しの旧 release / 更新エラー時**は、従来の feed チェック＋ブラウザ誘導に自動フォールバック（現状の挙動を壊さない）。
 
 ---
 
