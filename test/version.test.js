@@ -73,6 +73,17 @@ test('parse: rejects trailing junk after patch (regex is end-anchored)', () => {
   assert.deepEqual(parse('1.2.3-beta.1'), { major: 1, minor: 2, patch: 3, pre: 'beta.1' });
 });
 
+test('parse: accepts but ignores SemVer build metadata (+...)', () => {
+  // SemVer §10: build metadata is valid syntax and MUST be ignored for precedence.
+  assert.deepEqual(parse('1.0.0+build'), { major: 1, minor: 0, patch: 0, pre: '' });
+  assert.equal(parse('1.2.3-beta.1+exp.sha.5114f85').pre, 'beta.1'); // pre kept, build dropped
+  assert.equal(parse('1.0.0+'), null);          // empty build still rejected (end-anchor intact)
+  assert.equal(parse('1.2.3foo'), null);        // trailing junk still rejected
+  // ...so an external release tag with build metadata still compares correctly
+  assert.equal(isNewer('1.0.1', '1.0.0+build'), true);  // was false (no update offered)
+  assert.equal(compare('1.0.0', '1.0.0+xyz'), 0);       // build ignored for precedence
+});
+
 test('compare: unparseable inputs are treated as equal (no false update)', () => {
   assert.equal(compare('garbage', '0.1.0'), 0);
   assert.equal(isNewer('garbage', '0.1.0'), false);
