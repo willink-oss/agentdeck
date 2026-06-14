@@ -77,3 +77,23 @@ test('compare: unparseable inputs are treated as equal (no false update)', () =>
   assert.equal(compare('garbage', '0.1.0'), 0);
   assert.equal(isNewer('garbage', '0.1.0'), false);
 });
+
+test('parse: tolerates surrounding whitespace and uppercase V (feed normalization)', () => {
+  // the feed checker passes raw tag_name into compare/isNewer; these normalization
+  // paths (.trim() and /^v/i) were exercised by no prior test
+  assert.deepEqual(parse(' v1.2.3 '), parse('1.2.3'));
+  assert.deepEqual(parse('\t1.2.3\n'), { major: 1, minor: 2, patch: 3, pre: '' });
+  assert.deepEqual(parse('V0.4.0-beta.4'), { major: 0, minor: 4, patch: 0, pre: 'beta.4' });
+  assert.equal(compare('V1.0.1', 'v1.0.0'), 1);
+});
+
+test('compare: antisymmetric, incl. across the release/prerelease boundary', () => {
+  const pairs = [
+    ['1.0.0', '0.9.9'], ['1.0.0', '1.0.0-beta.1'], ['1.0.0-beta.2', '1.0.0-beta.1'],
+    ['1.0.0-alpha.1', '1.0.0-alpha.beta'], ['1.0.0-rc.1', '1.0.0-beta.11'],
+    ['v0.4.0-beta.4', '0.4.0-beta.3'], ['1.0.0', '1.0.0'],
+  ];
+  // use the JS === operator, NOT assert.equal: assert/strict treats 0 !== -0 (Object.is),
+  // but the plain === we want here considers 0 === -0 true
+  for (const [a, b] of pairs) assert.ok(compare(a, b) === -compare(b, a), `${a} vs ${b}`);
+});

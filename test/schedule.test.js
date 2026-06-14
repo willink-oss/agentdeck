@@ -113,6 +113,17 @@ test('shouldFire: weekly fires only on selected days; disabled never fires', () 
   assert.equal(shouldFire(daily({ enabled: false }), at(2026, 6, 12, 9, 0, 10), at(2026, 6, 12, 8, 59, 40)), false);
 });
 
+test('shouldFire: once — fires once in-window, never recurs (lastOccurrenceAtOrBefore once branch)', () => {
+  const once = (over) => daily({ repeat: { type: 'once', date: '2026-06-12' }, ...over }); // target 09:00
+  assert.equal(shouldFire(once(), at(2026, 6, 12, 9, 0, 20), at(2026, 6, 12, 8, 59, 50)), true);  // inside (lastTick, now]
+  assert.equal(shouldFire(once(), at(2026, 6, 12, 8, 59, 0), at(2026, 6, 12, 8, 58, 0)), false);   // before the target
+  assert.equal(shouldFire(once(), at(2026, 6, 13, 9, 0, 20), at(2026, 6, 13, 8, 59, 50)), false);  // a one-shot never recurs
+  const fired = once({ lastFiredAt: new Date(at(2026, 6, 12, 9, 0, 10)).toISOString() });
+  assert.equal(shouldFire(fired, at(2026, 6, 12, 9, 0, 40), at(2026, 6, 12, 8, 59, 50)), false);    // same-minute lastFiredAt suppresses
+  assert.equal(shouldFire(daily({ repeat: { type: 'once', date: 'nope' } }), at(2026, 6, 12, 9, 0, 20), at(2026, 6, 12, 8, 59, 50)), false); // malformed date never fires
+  assert.equal(shouldFire(daily({ repeat: { type: 'weekly', days: [] } }), at(2026, 6, 15, 9, 0, 20), at(2026, 6, 15, 8, 59, 50)), false);   // weekly with no days: null fallthrough
+});
+
 // ---- missedOnce ---------------------------------------------------------------
 
 test('missedOnce: one-shot missed within the grace window fires on boot', () => {
