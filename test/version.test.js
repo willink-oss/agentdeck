@@ -46,6 +46,9 @@ test('compare: prerelease identifiers follow semver §11 precedence (#13)', () =
   assert.equal(compare('1.0.0-alpha.beta', '1.0.0-beta'), -1);
   assert.equal(compare('1.0.0-beta.2', '1.0.0-beta.11'), -1);
   assert.equal(compare('1.0.0-rc.1', '1.0.0-beta.11'), 1);
+  // a leading-zero numeric form (invalid semver) is tolerated as an equal value,
+  // not mis-ranked above the canonical form
+  assert.equal(compare('1.0.0-beta.01', '1.0.0-beta.1'), 0);
 });
 
 test('compare: tolerates a leading v on either side', () => {
