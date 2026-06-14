@@ -30,6 +30,27 @@ test('compare: release outranks prerelease of same x.y.z', () => {
   assert.equal(compare('1.0.0-beta.1', '1.0.0-beta.1'), 0);
 });
 
+test('compare: prerelease identifiers follow semver §11 precedence (#13)', () => {
+  // numeric identifiers compare numerically, not as strings ("beta.10" > "beta.2")
+  assert.equal(compare('1.0.0-beta.10', '1.0.0-beta.2'), 1);
+  assert.equal(compare('1.0.0-beta.2', '1.0.0-beta.10'), -1);
+  assert.equal(compare('0.4.0-beta.1', '0.4.0-beta.10'), -1);
+  assert.equal(isNewer('0.4.0-beta.10', '0.4.0-beta.2'), true);
+  // numeric identifiers rank lower than alphanumeric
+  assert.equal(compare('1.0.0-alpha.1', '1.0.0-alpha.beta'), -1);
+  // a larger set of pre-release fields wins when the shared prefix is equal
+  assert.equal(compare('1.0.0-beta', '1.0.0-beta.1'), -1);
+  assert.equal(compare('1.0.0-alpha.1.1', '1.0.0-alpha.1'), 1);
+  // the canonical semver §11 ordering chain
+  assert.equal(compare('1.0.0-alpha', '1.0.0-alpha.1'), -1);
+  assert.equal(compare('1.0.0-alpha.beta', '1.0.0-beta'), -1);
+  assert.equal(compare('1.0.0-beta.2', '1.0.0-beta.11'), -1);
+  assert.equal(compare('1.0.0-rc.1', '1.0.0-beta.11'), 1);
+  // a leading-zero numeric form (invalid semver) is tolerated as an equal value,
+  // not mis-ranked above the canonical form
+  assert.equal(compare('1.0.0-beta.01', '1.0.0-beta.1'), 0);
+});
+
 test('compare: tolerates a leading v on either side', () => {
   assert.equal(compare('v0.1.1', '0.1.0'), 1);
   assert.equal(compare('0.1.0', 'v0.1.1'), -1);
