@@ -42,6 +42,22 @@ test('sanitizeBranch: keeps slashes and dots in the middle', () => {
   assert.equal(sanitizeBranch('release/v1.2.3'), 'release/v1.2.3');
 });
 
+test('sanitizeBranch: emits a git-valid ref (no "..", trailing ".", or ".lock")', () => {
+  // git worktree add -b rejects these; previously they passed through and broke launch
+  assert.equal(sanitizeBranch('a..b'), 'a.b');         // ".." collapsed
+  assert.equal(sanitizeBranch('feature.'), 'feature'); // trailing "." trimmed
+  assert.equal(sanitizeBranch('x.lock'), 'x');         // ".lock" suffix stripped
+  assert.equal(sanitizeBranch('...'), 'session');      // collapses+trims to empty -> fallback
+  // structural invariant: every output is a syntactically valid branch ref
+  for (const inp of ['a..b', 'feature.', 'x.lock', 'release/v1.2.3', 'feat/x~y^z', 'wip..', 'x.lock/y']) {
+    const out = sanitizeBranch(inp);
+    assert.match(out, /^[A-Za-z0-9._\/-]+$/, `${inp} -> ${out}`);
+    assert.ok(!out.includes('..'), `${inp} -> ${out} must not contain ".."`);
+    assert.ok(!/\.$/.test(out), `${inp} -> ${out} must not end with "."`);
+    assert.ok(!/\.lock(?:$|\/)/.test(out), `${inp} -> ${out} must not have a ".lock" suffix`);
+  }
+});
+
 test('worktreeFolderName: combines repo + branch and flattens slashes', () => {
   assert.equal(worktreeFolderName('myrepo', 'agentdeck/claude-1'), 'myrepo__agentdeck-claude-1');
   assert.equal(worktreeFolderName('tsuu', 'feature/x'), 'tsuu__feature-x');
