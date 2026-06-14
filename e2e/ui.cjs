@@ -129,6 +129,20 @@ async function closeHard(app) {
     ok(true, '⌘W kills the active pane');
     await win.fill('#name', '');
 
+    // -- modals swallow app chords: ⌘Enter/⌘K behind the schedule manager must not reach the deck --
+    await win.click('#sched-manage');
+    await win.waitForFunction(() => !document.querySelector('#sched-overlay').hidden, null, { timeout: TIMEOUT });
+    const panesBeforeModalChord = await win.evaluate(() => document.querySelectorAll('.pane').length);
+    await win.focus('#sched-command');
+    await win.keyboard.press(`${MOD}+Enter`); // missing guard would launch a stray session from the main form
+    await win.keyboard.press(`${MOD}+KeyK`);  // missing guard would pop the palette over the modal
+    const panesAfterModalChord = await win.evaluate(() => document.querySelectorAll('.pane').length);
+    const paletteStillHidden = await win.evaluate(() => document.querySelector('#palette').hidden);
+    ok(panesAfterModalChord === panesBeforeModalChord && paletteStillHidden,
+      'schedule modal swallows app chords (no stray launch / palette behind it)');
+    await win.click('#sched-close');
+    await win.waitForFunction(() => document.querySelector('#sched-overlay').hidden, null, { timeout: TIMEOUT });
+
     // -- attention detection: an idle shell prompt flags fast --------------------
     // focus beta so alpha is unwatched; its tail is a shell prompt (zsh % / bash $ /
     // PowerShell >) -> classified 'prompt'; the 15s wait covers any kind's cutoff

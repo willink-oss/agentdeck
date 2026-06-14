@@ -44,7 +44,11 @@ window.addEventListener('keydown', (e) => {
   if (!appChord(e)) return;
   if (document.activeElement && document.activeElement.isContentEditable) return; // editing a name
   if (!paletteEl.hidden) return; // the open palette handles its own keys
-  if (!presetOverlay.hidden) return; // modal: keep ⌘W/⌘Enter/⌘K away from the deck behind it
+  // modals: keep ⌘W/⌘Enter/⌘K etc. off the deck behind them (⌘Enter is otherwise
+  // designed to fire even from a focused input, so it would launch a stray session)
+  if (!presetOverlay.hidden) return; // agent preset manager
+  if (!schedOverlay.hidden) return;  // schedule manager
+  if (!diffOverlay.hidden) return;   // diff drawer
   const code = chordKey(e);
   if (code === 'KeyK') { e.preventDefault(); e.stopPropagation(); openPalette(); }
   else if (code >= 'Digit1' && code <= 'Digit9') {
