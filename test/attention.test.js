@@ -96,3 +96,13 @@ test('classifyTail: Claude Code permission dialog (4-line shape) is a question',
     '╰────────────────────────────────╯',
   ]), 'question');
 });
+
+test('classifyTail: U+2800 blank-braille pad must not mask a prompt/question', () => {
+  // TUIs pad lines with U+2800 (blank braille, the "⠀" below). It must not read
+  // as a spinner, nor defeat the \s*$-anchored prompt/question patterns.
+  assert.equal(classifyTail(['Proceed? ⠀']), 'question'); // was 'working' (~10x late flag)
+  assert.equal(classifyTail(['$ ⠀']), 'prompt');
+  assert.equal(classifyTail(['⠀$']), 'prompt');           // leading blank pad is not a spinner
+  assert.notEqual(classifyTail(['Build complete.', '⠀']), 'working');
+  assert.equal(classifyTail(['⠹ thinking']), 'working');  // a real spinner frame still works
+});
