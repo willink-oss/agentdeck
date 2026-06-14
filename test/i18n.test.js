@@ -121,3 +121,19 @@ test('html parity: every data-i18n* key in index.html exists in the dictionary',
   assert.deepEqual(missing, [], 'index.html references keys absent from lib/i18n.js: ' + missing.join(', '));
   assert.ok(keys.size >= 40, `expected the chrome to be broadly keyed, got ${keys.size}`);
 });
+
+test('js parity: every static t(\'key\') in renderer JS exists in the dictionary', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname, '..', 'renderer');
+  const keys = new Set();
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    // static-literal subset only (mirrors the html-parity guard above); t(variable) and
+    // t(cond ? 'a' : 'b') are intentionally out of scope — the quote must follow t( directly
+    for (const m of src.matchAll(/\bt\(\s*(['"])([a-zA-Z0-9_.]+)\1/g)) keys.add(m[2]);
+  }
+  const missing = [...keys].filter((k) => !I18n.DICT[k]);
+  assert.deepEqual(missing, [], 'renderer JS references t() keys absent from lib/i18n.js: ' + missing.join(', '));
+  assert.ok(keys.size >= 40, `expected renderer JS to be broadly keyed, got ${keys.size}`);
+});
