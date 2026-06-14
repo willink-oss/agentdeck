@@ -91,6 +91,10 @@ jobs:
               npm run dist
             else
               echo "macOS: MAC_CSC_LINK not set -> UNSIGNED build; in-app auto-update disabled (browser fallback)."
+              # CSC_LINK is exported as "" (empty, but SET) when the secret is absent; electron-builder
+              # treats a set-but-empty CSC_LINK as a certificate path and aborts ("… not a file").
+              # Unset all signing vars so the unsigned build sees them as truly absent.
+              unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
               npm run pack:unsigned
               # An unsigned mac app cannot self-install via Squirrel.Mac, so do NOT
               # publish update metadata for it: drop the zip + yml, keep only the .dmg.
