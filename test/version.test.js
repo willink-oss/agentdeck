@@ -64,6 +64,15 @@ test('isNewer: true only when strictly greater', () => {
   assert.equal(isNewer('1.0.0-beta.1', '1.0.0'), false); // prerelease is not newer than release
 });
 
+test('parse: rejects trailing junk after patch (regex is end-anchored)', () => {
+  assert.equal(parse('1.2.3foo'), null);
+  assert.equal(parse('1.2.3.4'), null);
+  assert.equal(parse('1.2.3.4.5'), null);
+  assert.equal(compare('1.2.3', '1.2.3foo'), 0); // unparseable -> equal, no false update
+  // a well-formed prerelease still parses fully (no false rejection)
+  assert.deepEqual(parse('1.2.3-beta.1'), { major: 1, minor: 2, patch: 3, pre: 'beta.1' });
+});
+
 test('compare: unparseable inputs are treated as equal (no false update)', () => {
   assert.equal(compare('garbage', '0.1.0'), 0);
   assert.equal(isNewer('garbage', '0.1.0'), false);
