@@ -462,6 +462,7 @@ const CAN_AUTO_UPDATE = app.isPackaged;
 const liveWindow = () => { const w = BrowserWindow.getAllWindows()[0]; return w && !w.isDestroyed() ? w : null; };
 const sendUpdate = (channel, payload) => { const w = liveWindow(); if (w) w.webContents.send(channel, payload); };
 const stripV = (v) => String(v == null ? '' : v).replace(/^v/i, '');
+let updateCheckInFlight = false; // true while checkForUpdates() is intentionally awaited
 
 autoUpdater.autoDownload = false;        // download only after the user clicks ダウンロード
 autoUpdater.autoInstallOnAppQuit = true; // if downloaded but not yet installed, apply on next quit
@@ -475,6 +476,9 @@ autoUpdater.on('update-downloaded', (info) => {
   sendUpdate('update:downloaded', { latest: stripV(info && info.version) });
 });
 autoUpdater.on('error', (err) => {
+  // While a check is intentionally awaited, checkForUpdate()'s catch owns the failure
+  // (feed fallback). Only forward download-time errors so the UI can revert.
+  if (updateCheckInFlight) return;
   sendUpdate('update:error', { message: String((err && err.message) || err) });
 });
 
@@ -515,8 +519,10 @@ async function feedCheck() {
 /** Check for an update: electron-updater first (packaged), feed fallback otherwise. */
 async function checkForUpdate() {
   if (CAN_AUTO_UPDATE) {
+    updateCheckInFlight = true;
     try { await autoUpdater.checkForUpdates(); return { ok: true }; }
     catch (_) { return feedCheck(); } // no metadata yet / unreachable feed → browser link
+    finally { updateCheckInFlight = false; }
   }
   return feedCheck();
 }
@@ -525,7 +531,7 @@ ipcMain.handle('update:check', () => checkForUpdate());
 ipcMain.handle('update:download', async () => {
   if (!CAN_AUTO_UPDATE) return { ok: false, reason: 'not-packaged' };
   try { await autoUpdater.downloadUpdate(); return { ok: true }; }
-  catch (err) { sendUpdate('update:error', { message: String((err && err.message) || err) }); return { ok: false }; }
+  catch (_) { return { ok: false }; } // the autoUpdater 'error' event forwards the message
 });
 ipcMain.on('update:install', () => { try { autoUpdater.quitAndInstall(); } catch (_) {} });
 ipcMain.on('update:open', (_e, url) => {

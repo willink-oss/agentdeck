@@ -63,20 +63,28 @@ jobs:
       - name: Build installers
         shell: bash
         env:
-          # macOS code signing / notarization — consumed only on macos-latest. These
-          # stay empty until the repo secrets are added, in which case the mac build
-          # falls back to UNSIGNED (in-app auto-update off; users get the browser
-          # fallback). Set MAC_CSC_LINK + MAC_CSC_KEY_PASSWORD + APPLE_ID +
-          # APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID together — see docs/macos-code-signing.md.
+          # macOS code signing / notarization — scoped to macos-latest ONLY (least
+          # privilege: never expose Apple creds to the win/linux jobs). Behavior:
+          #   * MAC_CSC_LINK unset                  -> UNSIGNED mac build (graceful
+          #     fallback; in-app auto-update off, users get the browser fallback).
+          #   * MAC_CSC_LINK set + all APPLE_* set   -> signed + notarized (auto-update ON).
+          #   * MAC_CSC_LINK set + any APPLE_* missing -> build fails fast (guard below),
+          #     instead of a cryptic notarization error.
+          # Set all 5 secrets together — see docs/macos-code-signing.md.
           CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
         run: |
           set -euo pipefail
           if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             if [[ -n "${CSC_LINK}" ]]; then
+              if [[ -z "${APPLE_ID}" || -z "${APPLE_APP_SPECIFIC_PASSWORD}" || -z "${APPLE_TEAM_ID}" ]]; then
+                echo "ERROR: MAC_CSC_LINK is set but APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID are missing." >&2
+                echo "       All 5 mac signing secrets must be set together — see docs/macos-code-signing.md." >&2
+                exit 1
+              fi
               echo "macOS: signing cert present -> signed + notarized build (in-app auto-update ENABLED)"
               npm run dist
             else
