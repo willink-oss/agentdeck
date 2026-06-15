@@ -18,6 +18,10 @@ test('deriveBadge: first word uppercased, capped, with fallback', () => {
   assert.equal(P.deriveBadge(null), 'AGENT');
   assert.equal(P.deriveBadge('日本語エージェント'), 'AGENT'); // non-latin strips to empty
   assert.equal(P.deriveBadge('c++ tool'), 'C++');
+  // a leading decorative token (emoji / arrow / bullet) is skipped, not fatal
+  assert.equal(P.deriveBadge('→ Go'), 'GO');           // was 'AGENT'
+  assert.equal(P.deriveBadge('🚀 Rocket'), 'ROCKET');  // was 'AGENT'
+  assert.equal(P.deriveBadge('• Aider chat'), 'AIDER'); // was 'AGENT'
 });
 
 test('keyFor: slugged, custom- prefixed, deduped', () => {
