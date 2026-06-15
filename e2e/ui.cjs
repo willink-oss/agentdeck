@@ -56,11 +56,12 @@ async function closeHard(app) {
   });
   let app = await launchApp();
   let win;
+  let dialogAction = 'accept'; // e2e flips this to 'dismiss' to test a confirm() being declined
 
   try {
     const attachWindow = async () => {
       win = await app.firstWindow({ timeout: TIMEOUT });
-      win.on('dialog', (d) => d.accept());
+      win.on('dialog', (d) => (dialogAction === 'dismiss' ? d.dismiss() : d.accept()));
       win.on('pageerror', (e) => console.error('renderer pageerror:', e && e.message));
       await win.waitForFunction(() => document.querySelectorAll('#preset option').length > 0, null, { timeout: TIMEOUT });
       await win.evaluate(() => { try { setLanguage('en'); } catch (_) {} }); // deterministic UI language for assertions
@@ -127,6 +128,32 @@ async function closeHard(app) {
     await win.keyboard.press(`${MOD}+KeyW`);
     await win.waitForFunction(() => document.querySelectorAll('.pane').length === 2, null, { timeout: TIMEOUT });
     ok(true, '⌘W kills the active pane');
+    await win.fill('#name', '');
+
+    // -- ⌘W on a RISKY session (isolated worktree) confirms first; dismiss cancels --
+    await win.selectOption('#preset', 'shell');
+    await win.fill('#name', 'wtkill');
+    await win.fill('#cwd', repo);
+    await win.check('#wt-enable');
+    await win.fill('#wt-branch', 'agentdeck/e2e-killconfirm');
+    await win.click('#launch');
+    await win.waitForFunction(() =>
+      [...document.querySelectorAll('.pane.active .pane-name')].some((el) => el.textContent === 'wtkill'),
+      null, { timeout: TIMEOUT });
+    const paneCount = () => win.evaluate(() => document.querySelectorAll('.pane').length);
+    const withWt = await paneCount();
+    dialogAction = 'dismiss';
+    await win.keyboard.press(`${MOD}+KeyW`);
+    await win.waitForTimeout(400); // a cancelled kill must NOT drop the pane
+    ok(await paneCount() === withWt, '⌘W on a worktree session asks first; dismiss keeps the pane');
+    dialogAction = 'accept';
+    await win.keyboard.press(`${MOD}+KeyW`);
+    await win.waitForFunction((n) => document.querySelectorAll('.pane').length === n, withWt - 1, { timeout: TIMEOUT });
+    ok(true, '⌘W on a worktree session: confirm accepted kills it');
+    // reset the form so later steps are unaffected. Clear #wt-branch FIRST: unchecking
+    // #wt-enable disables it, and fill() on a disabled input hangs until timeout.
+    await win.fill('#wt-branch', '');
+    await win.uncheck('#wt-enable');
     await win.fill('#name', '');
 
     // -- modals swallow app chords: ⌘Enter/⌘K behind the schedule manager must not reach the deck --

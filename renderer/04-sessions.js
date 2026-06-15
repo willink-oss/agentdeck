@@ -127,6 +127,12 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
 function killSession(id) {
   const s = sessions.get(id);
   if (!s) return;
+  // Kill is irreversible — saveWorkspace() runs after the delete and the restore button
+  // only appears at sessions.size===0, so a killed 1-of-N pane can't be brought back.
+  // Confirm only when there's real loss at stake: a live agent mid-interaction, or
+  // unmerged work in an isolated worktree. Exited/plain shells stay one-click.
+  const risky = s.alive && (s.worktreePath || s.attention);
+  if (risky && !confirm(t('pane.confirmKill', { name: s.name }))) return;
   window.deck.kill(id);
   try { s.ro.disconnect(); } catch (_) {}
   try { s.term.dispose(); } catch (_) {}
