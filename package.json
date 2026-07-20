@@ -133,8 +133,8 @@
     "xterm-addon-search": "^0.13.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.6",
-    "electron": "^42.5.0",
+    "@electron/rebuild": "^4.2.0",
+    "electron": "^43.1.1",
     "electron-builder": "^26.15.3"
   }
 }
