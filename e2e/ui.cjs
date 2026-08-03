@@ -578,7 +578,8 @@ async function closeHard(app) {
     await win.click('#diff-merge');
     await win.waitForFunction(() => document.querySelector('#diff-meta').textContent.startsWith('✓ merged'),
       null, { timeout: TIMEOUT });
-    ok(fs.readFileSync(path.join(repo, 'restored.txt'), 'utf8') === 'survives restart\n' &&
+    const mergedFile = fs.readFileSync(path.join(repo, 'restored.txt'), 'utf8').replace(/\r\n/g, '\n');
+    ok(mergedFile === 'survives restart\n' &&
       /agentdeck\/e2e-persist/.test(git(repo, 'log', '-1', '--pretty=%s')),
     'restart: validated worktree branch merges successfully into the base checkout');
 
