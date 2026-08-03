@@ -55,6 +55,13 @@ function commandFor(presetKey, profileId) {
 function profileIsDangerous(presetKey, profileId) {
   return Presets.isDangerous(presetKey, profileId, PRESETS, presetOverrides);
 }
+/** Translated name of a profile. Built by concatenation rather than a literal so
+ *  the i18n parity guard (which only scans static t('…') literals) is not fed a
+ *  half-key; the keys themselves are asserted to exist by profile-key coverage. */
+function profileLabel(profileId) {
+  const key = 'profile.' + (profileId || Presets.DEFAULT_PROFILE);
+  return I18n.DICT[key] ? t(key) : String(profileId || '');
+}
 
 /**
  * Read a resolved color out of the PULSE stylesheet.

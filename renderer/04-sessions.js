@@ -1,9 +1,21 @@
 'use strict';
 
 // ---- session creation ------------------------------------------------------
-async function launch({ presetKey, command, name, cwd, worktree, branch, restoreMeta }) {
+async function launch({ presetKey, command, name, cwd, worktree, branch, profileId, restoreMeta }) {
   const preset = PRESETS[presetKey] || PRESETS.shell;
   const restored = restoreMeta || {};
+  const profile = profileId || Presets.DEFAULT_PROFILE;
+  // An explicit command wins (the form lets you type anything, and restore
+  // replays the exact string that ran last time); otherwise the profile decides.
+  if (command == null) command = commandFor(presetKey, profile);
+  // Handing an agent unattended write/exec authority is worth one keystroke.
+  // Judged on the resolved command, so a typed-in --dangerously-… is caught too,
+  // and skipped on restore — the user already agreed when they first launched it.
+  if (!restoreMeta && Presets.looksDangerous(command)) {
+    if (!confirm(t('profile.dangerConfirm', { label: profileLabel(profile), command }))) {
+      return { ok: false, error: 'cancelled' };
+    }
+  }
   const id = 'sess_' + (++seq) + '_' + Math.random().toString(36).slice(2, 6);
   const displayName = name || `${preset.label} #${seq}`;
   const workdir = cwd || cwdInput.value.trim() || '';
@@ -71,6 +83,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch, restore
     gitCwd: null, baseSha: null, branch: null, baseBranch: null, gitRoot: null, worktreePath: null,
     repoId: repoIdForCwd(workdir), repoMatchCwd: workdir, launchCwd: workdir,
     presetKey, command,            // remembered so the deck can be saved + re-spawned
+    profileId: profile,            // which variant produced `command`, for the restored UI
   };
   sessions.set(id, s);
   updateCount();

@@ -120,3 +120,48 @@ test('normalizeSnapshot: sanitizes unknown layout and malformed envelopes', () =
   });
   assert.deepEqual(normalizeSnapshot(null, '3'), { version: 2, layout: '3', sessions: [] });
 });
+
+/* ---- profileId: which variant produced the saved command ------------------ */
+
+test('toConfig: carries profileId so a restored pane can name its variant', () => {
+  const cfg = toConfig({ presetKey: 'claude', command: 'claude --continue', profileId: 'continue', launchCwd: '/w' });
+  assert.equal(cfg.profileId, 'continue');
+  assert.equal(cfg.command, 'claude --continue');
+});
+
+test('toConfig: omits profileId when there is none, keeping plain decks small', () => {
+  const cfg = toConfig({ presetKey: 'shell', launchCwd: '/w' });
+  assert.equal('profileId' in cfg, false);
+  assert.equal('profileId' in toConfig({ presetKey: 'shell', profileId: '', launchCwd: '/w' }), false);
+});
+
+test('toConfig: profileId rides along on worktree sessions too', () => {
+  const cfg = toConfig({
+    presetKey: 'codex', command: 'codex resume --last', profileId: 'continue',
+    gitCwd: '/w/.agentdeck-worktrees/x', launchCwd: '/w', worktreePath: '/w/.agentdeck-worktrees/x',
+    branch: 'agentdeck/x', baseBranch: 'main', baseSha: 'a'.repeat(40), gitRoot: '/w',
+  });
+  assert.equal(cfg.profileId, 'continue');
+  assert.equal(cfg.worktreePath, '/w/.agentdeck-worktrees/x');
+});
+
+test('normalize: keeps a valid profileId and drops a malformed one', () => {
+  assert.equal(normalize([{ presetKey: 'claude', profileId: 'plan' }])[0].profileId, 'plan');
+  assert.equal('profileId' in normalize([{ presetKey: 'claude', profileId: 42 }])[0], false);
+  assert.equal('profileId' in normalize([{ presetKey: 'claude', profileId: null }])[0], false);
+  assert.equal('profileId' in normalize([{ presetKey: 'claude' }])[0], false);
+});
+
+test('normalize: a deck saved by an older build still restores, just without the variant', () => {
+  const legacy = [{ presetKey: 'claude', command: 'claude --continue', name: 'a', cwd: '/w' }];
+  const out = normalize(legacy);
+  assert.equal(out[0].command, 'claude --continue'); // the concrete command is what replays
+  assert.equal('profileId' in out[0], false);
+});
+
+test('profileId survives a save/load round trip', () => {
+  const snap = createSnapshot([toConfig({ presetKey: 'claude', command: 'claude --permission-mode plan', profileId: 'plan', launchCwd: '/w' })], 'fit');
+  const back = normalizeSnapshot(JSON.parse(JSON.stringify(snap)), 'auto');
+  assert.equal(back.sessions[0].profileId, 'plan');
+  assert.equal(back.layout, 'fit');
+});

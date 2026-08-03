@@ -231,6 +231,14 @@ function closeScheduleManager() { schedOverlay.hidden = true; }
 
 schedForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  // A scheduled launch fires with nobody watching, so the launch-time confirm
+  // that guards --dangerously-… has no one to ask. Refuse at save time instead:
+  // blocking at fire time would silently drop a 3am run the user thought was set.
+  if (Presets.looksDangerous(schedCommandInput.value)) {
+    schedFormMsg.textContent = t('profile.schedBlocked', { label: t('profile.yolo') });
+    schedFormMsg.hidden = false;
+    return;
+  }
   const type = schedRepeatSel.value;
   const raw = {
     repoId: schedRepoSel.value,

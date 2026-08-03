@@ -149,3 +149,17 @@ test('js parity: every static t(\'key\') in renderer JS exists in the dictionary
   assert.deepEqual(missing, [], 'renderer JS references t() keys absent from lib/i18n.js: ' + missing.join(', '));
   assert.ok(keys.size >= 40, `expected renderer JS to be broadly keyed, got ${keys.size}`);
 });
+
+test('profile parity: every built-in profile id has a translated label', () => {
+  // profileLabel() builds 'profile.<id>' at runtime, so the static js-parity guard
+  // above cannot see these keys. Cover them from the preset table instead: adding
+  // a profile without translating it fails here rather than rendering a raw id.
+  const Presets = require('../lib/presets');
+  const ids = new Set();
+  for (const key of Object.keys(Presets.BUILTINS)) {
+    for (const p of Presets.profilesFor(key)) ids.add(p.id);
+  }
+  assert.ok(ids.size >= 4, `expected several profile ids, got ${ids.size}`);
+  const missing = [...ids].filter((id) => !I18n.DICT['profile.' + id]);
+  assert.deepEqual(missing, [], 'profile ids with no label: ' + missing.join(', '));
+});

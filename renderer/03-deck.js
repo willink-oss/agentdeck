@@ -97,6 +97,7 @@ async function restoreWorkspace() {
   for (const c of snapshot.sessions) {
     const result = await launch({
       presetKey: c.presetKey, command: c.command, name: c.name, cwd: c.cwd, worktree: false, branch: '',
+      profileId: c.profileId || '',
       restoreMeta: {
         gitCwd: c.cwd, launchCwd: c.launchCwd || c.cwd, repoId: c.repoId || '',
         baseSha: c.baseSha || '', branch: c.branch || '', baseBranch: c.baseBranch || '', gitRoot: c.gitRoot || '',

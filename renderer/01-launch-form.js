@@ -17,9 +17,22 @@ function buildQuickChips() {
   for (const key of Presets.chipKeys(customPresets)) {
     const chip = document.createElement('button');
     chip.type = 'button'; chip.className = 'chip'; chip.textContent = PRESETS[key].label;
-    chip.addEventListener('click', () => launch({ presetKey: key, command: PRESETS[key].cmd }));
+    // a quick chip is deliberately the plain launch — no profile, no surprises
+    chip.addEventListener('click', () => launch({ presetKey: key, profileId: Presets.DEFAULT_PROFILE }));
     host.appendChild(chip);
   }
+}
+
+/** Which profile the launch form is currently set to. The command field stays
+ *  the source of truth for what runs; this records the user's choice so the
+ *  restored deck can name it. */
+let currentProfileId = Presets.DEFAULT_PROFILE;
+/** Point the form at a profile: remember it and refill the command field. */
+function setProfile(id) {
+  const key = presetSel.value;
+  const known = Presets.profilesFor(key).some((p) => p.id === id);
+  currentProfileId = known ? id : Presets.DEFAULT_PROFILE;
+  commandInput.value = commandFor(key, currentProfileId);
 }
 /** Re-merge + redraw the select and chips after a custom-preset change, keeping
  *  the user's current selection (and typed command) when it still exists. */
@@ -32,7 +45,9 @@ function rebuildPresetUI() {
   buildQuickChips();
 }
 
-presetSel.addEventListener('change', () => { commandInput.value = PRESETS[presetSel.value].cmd; });
+// switching agent resets to that agent's default profile — a "plan" carried over
+// from another CLI would silently mean a different flag, or none at all
+presetSel.addEventListener('change', () => setProfile(Presets.DEFAULT_PROFILE));
 wtEnable.addEventListener('change', () => { wtBranch.disabled = !wtEnable.checked; if (wtEnable.checked) wtBranch.focus(); });
 
 $('#browse').addEventListener('click', async () => {
@@ -51,11 +66,15 @@ async function refreshRepoHint() {
   } catch (_) { repoHint.textContent = ''; }
 }
 
-/** Read the launch form into a launch() options object (optional cwd override). */
+/** Read the launch form into a launch() options object (optional cwd override).
+ *  `command` is passed verbatim: the field is freely editable, so whatever is in
+ *  it wins over the profile — but `profileId` still records which variant the
+ *  user picked, so a restored deck can show it. */
 function currentLaunchOpts(cwdOverride) {
   return {
     presetKey: presetSel.value,
     command: commandInput.value,
+    profileId: currentProfileId,
     name: nameInput.value.trim(),
     cwd: (cwdOverride != null ? cwdOverride : cwdInput.value.trim()),
     worktree: wtEnable.checked,
