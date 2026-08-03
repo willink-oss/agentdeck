@@ -140,6 +140,20 @@ async function closeHard(app) {
     await win.waitForFunction(() =>
       [...document.querySelectorAll('.pane.active .pane-name')].some((el) => el.textContent === 'wtkill'),
       null, { timeout: TIMEOUT });
+    // The pane becomes active before the async main-process spawn has resolved.
+    // Wait for the authoritative Git metadata to be saved instead of racing the
+    // worktree creation on slower platforms (notably Windows CI).
+    await win.waitForFunction(() => {
+      try {
+        const snapshot = JSON.parse(localStorage.getItem(Workspace.KEY) || 'null');
+        const session = snapshot && Array.isArray(snapshot.sessions)
+          ? snapshot.sessions.find((s) => s.name === 'wtkill')
+          : null;
+        return snapshot && snapshot.version === 2 && session && session.repoId &&
+          session.launchCwd && session.gitRoot && session.baseSha && session.branch &&
+          session.baseBranch && session.worktreePath;
+      } catch (_) { return false; }
+    }, null, { timeout: TIMEOUT });
     const savedWt = await win.evaluate(() => {
       const snapshot = JSON.parse(localStorage.getItem(Workspace.KEY));
       return { snapshot, session: snapshot.sessions.find((s) => s.name === 'wtkill') };
@@ -268,13 +282,26 @@ async function closeHard(app) {
       null, { timeout: 10000 });
     ok(true, '「すべて表示」 clears the filter');
 
+    const setWindowMetrics = async (width, height, zoom) => {
+      await app.evaluate(({ BrowserWindow }, metrics) => {
+        const bw = BrowserWindow.getAllWindows()[0];
+        bw.setContentSize(metrics.width, metrics.height);
+        bw.webContents.setZoomFactor(metrics.zoom);
+      }, { width, height, zoom });
+      await win.waitForFunction((expected) =>
+        Math.abs(window.innerWidth - expected.width / expected.zoom) < 30 &&
+        Math.abs(window.innerHeight - expected.height / expected.zoom) < 30,
+      { width, height, zoom }, { timeout: TIMEOUT });
+    };
+
     // -- fit layout: eight real PTYs stay inside the stage at 1440x920 ----------
+    // BrowserWindow's constructor size is an outer-window request and hosted
+    // runners can constrain it differently. Set the content viewport explicitly
+    // so this assertion measures the documented 1440x920 layout on every OS.
+    await setWindowMetrics(1440, 920, 1);
     for (let i = 0; i < 6; i++) await launchShell(`fit-${i + 1}`, i % 2 ? repo : os.homedir());
     await win.click('.ls-btn[data-cols="fit"]');
-    await win.waitForFunction(() =>
-      sessions.size === 8 && [...sessions.values()].every((s) => s.term.rows > 0 && s.term.cols > 0),
-    null, { timeout: TIMEOUT });
-    const fitState = await win.evaluate(() => {
+    const collectFitState = () => win.evaluate(() => {
       const host = document.querySelector('#grid');
       const gridRect = host.getBoundingClientRect();
       const items = [...host.querySelectorAll('.pane')].map((pane) => {
@@ -295,17 +322,33 @@ async function closeHard(app) {
         rows: new Set(items.map((item) => item.top)).size,
         cols: new Set(items.map((item) => item.left)).size,
         noScroll: host.scrollHeight <= host.clientHeight + 1 && host.scrollWidth <= host.clientWidth + 1,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        grid: {
+          width: gridRect.width, height: gridRect.height,
+          clientWidth: host.clientWidth, clientHeight: host.clientHeight,
+          scrollWidth: host.scrollWidth, scrollHeight: host.scrollHeight,
+        },
         items,
         savedMode: JSON.parse(localStorage.getItem(Workspace.KEY)).layout,
         fitPressed: document.querySelector('.ls-btn[data-cols="fit"]').getAttribute('aria-pressed'),
         autoPressed: document.querySelector('.ls-btn[data-cols="auto"]').getAttribute('aria-pressed'),
       };
     });
-    ok(fitState.mode === 'fit' && fitState.savedMode === 'fit' &&
-      fitState.cols === 2 && fitState.rows === 4 && fitState.noScroll &&
-      fitState.items.length === 8 && fitState.items.every((item) =>
-        item.paneInside && item.headerInside && item.termHeight > 0 && item.rows >= 8 && item.cols >= 30),
-    'fit layout keeps eight usable real terminals in a 2x4 grid');
+    const fitReady = (state) => state.mode === 'fit' && state.savedMode === 'fit' &&
+      state.viewport.width >= 1410 && state.viewport.height >= 890 &&
+      state.cols === 2 && state.rows === 4 && state.noScroll &&
+      state.items.length === 8 && state.items.every((item) =>
+        item.paneInside && item.headerInside && item.termHeight > 0 && item.rows >= 8 && item.cols >= 30);
+    const fitDeadline = Date.now() + TIMEOUT;
+    let fitState = await collectFitState();
+    while (!fitReady(fitState) && Date.now() < fitDeadline) {
+      await win.waitForTimeout(100);
+      fitState = await collectFitState();
+    }
+    if (!fitReady(fitState)) {
+      throw new Error(`UI FAIL: fit layout did not settle: ${JSON.stringify(fitState)}`);
+    }
+    ok(true, 'fit layout keeps eight usable real terminals in a 2x4 grid');
     ok(fitState.fitPressed === 'true' && fitState.autoPressed === 'false',
       'layout buttons expose the selected state with aria-pressed');
 
@@ -318,16 +361,6 @@ async function closeHard(app) {
     await win.waitForFunction(() => sessions.size === 2, null, { timeout: TIMEOUT });
 
     // -- narrow/200% reflow: sidebars stack and every surface remains reachable --
-    const setWindowMetrics = async (width, height, zoom) => {
-      await app.evaluate(({ BrowserWindow }, metrics) => {
-        const bw = BrowserWindow.getAllWindows()[0];
-        bw.setContentSize(metrics.width, metrics.height);
-        bw.webContents.setZoomFactor(metrics.zoom);
-      }, { width, height, zoom });
-      await win.waitForFunction((expected) =>
-        Math.abs(window.innerWidth - expected) < 30,
-      width / zoom, { timeout: TIMEOUT });
-    };
     await setWindowMetrics(900, 600, 1);
     const narrowState = await win.evaluate(() => {
       const reposRect = document.querySelector('#repos').getBoundingClientRect();
