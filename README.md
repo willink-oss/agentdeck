@@ -24,7 +24,7 @@
 9. **エージェント・プリセット管理** — Agent 横の ⚙ から**カスタムプリセット（表示名＋起動コマンド）を追加・編集・削除**。Aider 等の任意 CLI をコード変更なしで登録でき、select と Quick launch チップに反映（localStorage 永続）。さらにプリセットごとに**起動後コマンド（init）**を設定でき、エージェント起動が落ち着いてから `/effort ultracode` のようなスラッシュコマンドを自動入力（ビルトインの claude / agy にも設定可・毎回の手入力を省略）
 10. **キーボード操作** — ペイン移動（1–9）・前後循環（[ ]）・クイック起動（Enter）・終了（W）・**コマンドパレット（K・fuzzy 検索でセッションへジャンプ）**。修飾キーは macOS が **⌘**、Windows / Linux が **Ctrl+Shift**（素の Ctrl はシェル/readline のキーのため、ターミナルアプリの慣習に準拠）
 11. **スケジュール起動（⏰）** — 「リポジトリ × エージェント × 時刻」を登録すると指定時刻にセッションを自動起動。繰り返し（一回のみ / 毎日 / 曜日指定）、worktree 隔離（発火ごとに日時付きブランチで一意化）、有効/無効トグル・次回発火表示・起動時の OS 通知に対応。Agent 横の ⏰ かリポジトリ行の ⏰ から登録（`userData/schedules.json` に永続化、スケジューラは main プロセス常駐で 30 秒間隔の壁時計照合 — スリープ復帰でも取りこぼし/二重発火なし）
-12. **多言語対応（日本語 / 英語）** — UI を日本語・英語で切り替え（サイドバー下部のセレクタ）。初回は OS のロケールに追従。文字列は依存ゼロの `lib/i18n.js` 辞書（`{key: {ja, en}}`）で一元管理（中文・韓国語は issue #10 で追加予定）
+12. **多言語対応（5言語）** — UI を **日本語 / English / 简体中文 / 繁體中文 / 한국어**で切り替え（サイドバー下部のセレクタ）。初回は OS のロケールに追従（`zh-Hans-HK` のような明示スクリプト付きロケールも正しく解決）。文字列は依存ゼロの `lib/i18n.js` 辞書（`{key: {ja, en, zhHans, zhHant, ko}}`）で一元管理し、5言語の充足と `{param}` 一致を CI が検査
 
 ---
 
@@ -39,9 +39,10 @@
 | **Windows** (x64) | `.exe`（インストーラ） | SmartScreen → **詳細情報 → 実行** |
 | **Linux** (x64) | `.AppImage` / `.deb` | AppImage は `chmod +x` で実行（要 `libfuse2`）／deb は `apt install ./…deb` |
 
-> ⚠️ **未署名の OSS 配布**です（GitHub Releases が正本）。上記の初回起動手順で開けます。
-> Apple Developer ID 署名・公証や App Store 配布は予定していません（App Store はサンドボックスとシェル起動が非互換のため非対応）。
-> アプリは起動時に Releases を参照してアップデートの有無を通知します（自動更新はしません）。
+> ⚠️ **現在配布中のビルドは未署名**です（GitHub Releases が正本）。上記の初回起動手順で開けます。
+> リリース CI は署名用 secrets が設定されていれば macOS を署名＋公証しますが、v0.4.0-beta.10 時点では未設定のため未署名で出荷しています。Windows も未署名です。
+> App Store 配布は予定していません（サンドボックスとシェル起動が非互換のため非対応）。
+> **アップデート**: 起動時と 6 時間ごとに Releases を確認し、パッケージ版では**アプリ内でダウンロード＋インストール**します（Squirrel.Mac / NSIS / AppImage）。ダウンロードは通知をクリックしてから始まります（自動ダウンロードはしません）。未署名の macOS ビルドは Squirrel.Mac が自己インストールを拒否するため、ブラウザでのダウンロード導線にフォールバックします。
 
 ---
 
@@ -77,11 +78,23 @@ IPC / node-pty を検証。Linux は xvfb 経由）を実行します。
 npm run pack:unsigned   # 未署名 .dmg ← 現在のリリース手順
 ```
 
-> Apple Developer ID による署名＋公証（`npm run dist`）は**現状は予定していません**。
-> 将来署名する場合の手順（証明書・公証用 env）と、GitHub Releases 公開・アプリ内
-> アップデートチェックの詳細は **[RELEASE.md](RELEASE.md)** を参照してください。
+> Apple Developer ID による署名＋公証（`npm run dist`）は**リリース CI が対応済み**です。
+> `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD` / `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` /
+> `APPLE_TEAM_ID` の 5 secrets が揃っていれば署名＋公証（アプリ内自動更新が有効）、
+> 未設定なら未署名ビルドへ graceful fallback します。証明書の準備手順と GitHub Releases
+> 公開フローは **[RELEASE.md](RELEASE.md)** を参照してください。
 
-アプリは起動時と 6 時間ごとに Releases feed を確認し、新版があれば**右下のトースト＋OS 通知**（バージョンごとに一度・クリックでダウンロードページを開く）でお知らせします。バックグラウンドでも気づけます（自動更新はしません）。
+アプリは起動時と 6 時間ごとに Releases feed を確認し、新版があれば**右下のトースト＋OS 通知**（バージョンごとに一度）でお知らせします。パッケージ版では通知から**アプリ内でダウンロード＋インストール**まで完結します（`autoDownload` は無効なので、ダウンロードはユーザーのクリック後に始まります）。未署名 macOS ビルドや更新メタデータの無い旧リリースでは、ブラウザでダウンロードページを開くフォールバックに切り替わります。
+
+### プライバシー / ネットワーク
+
+- **テレメトリ・解析・クラッシュレポートは一切送信しません。** 収集も送信もしていません。
+- アプリが自発的に行う外部通信は**アップデート確認のみ**です（起動時と 6 時間ごとに
+  `api.github.com` / `github.com` へ HTTPS アクセス。ダウンロードを選んだ場合は成果物の取得）。
+  `AGENTDECK_UPDATE_FEED` 環境変数で向き先を変更でき、到達不能でもアプリは通常どおり動作します。
+- リポジトリ登録・スケジュール（`userData/` 配下の JSON）と UI 設定（localStorage）は
+  **すべてローカル保存**です。ターミナルの内容が外部に送られることはありません。
+- エージェント CLI（`claude` / `codex` 等）自身の通信は各 CLI のポリシーに従います。
 
 ## 使い方
 
@@ -135,7 +148,9 @@ agentdeck/
 │   ├── version.js       #   compare / isNewer（アップデートチェック）
 │   ├── presets.js       #   ビルトイン定義 + validate / keyFor / merge（プリセット管理）
 │   ├── schedule.js      #   validate / nextFireAt / shouldFire / markFired（スケジュール起動）
-│   └── i18n.js          #   t(key) / 辞書（ja / en の多言語）
+│   ├── i18n.js          #   t(key) / 辞書（ja / en / zh-Hans / zh-Hant / ko）
+│   ├── worktree-identity.js # main 専用: 保存 worktree の再検証（12 の拒否パス）
+│   └── session-merge.js #   main 専用: merge/PR の事前条件 + コンフリクト時 abort
 ├── renderer/            # UI（順序ロードの classic script 群 — global lexical scope を共有）
 │   ├── index.html       #   script の並び順がロード順（boot を含む 07 → 08 の順を維持）
 │   ├── 00-state.js      #   共有状態・定数・DOM refs・lib バインディング
@@ -147,11 +162,20 @@ agentdeck/
 │   ├── 06-keys-palette.js #  ⌘ショートカット・リネーム・⌘K パレット
 │   ├── 07-overlays-boot.js # プリセット管理・右クリックメニュー・update toast・boot
 │   ├── 08-schedules.js  #   スケジュール起動（⏰ モーダル・schedule:fire ハンドラ）
-│   └── styles.css
+│   └── styles.css       #   配色は PULSE（@willink-labs/pulse）の別名定義のみ
 ├── e2e/
 │   └── smoke.cjs        # CI 用ヘッドレス起動スモーク（3 OS・起動/preload/IPC/node-pty）
 └── test/                # node --test 用ユニットテスト
 ```
+
+## デザインシステム
+
+配色は [PULSE](https://github.com/willink-oss/pulse_theme)（i-Willink のデザインシステム）に従う。`@willink-labs/pulse` の dark ビルドを `renderer/index.html` で読み込み、`styles.css` は自前の色を一切持たず PULSE ロールの別名を定義するだけ。トークン契約側で色が変われば、Flutter アプリ・Web と同時にここへ届く。
+
+割り切りが 2 つある。どちらも「デザインシステムは端末の外枠を統べるが、中身の意味は統べない」という線引き：
+
+- **ANSI 16 色は PULSE 化しない**（`renderer/00-state.js` の `TERM_THEME`）。端末が赤を出すのは「エラー」、緑は「成功」という契約で、利用者は長年の慣れで読む。背景・前景・カーソル・選択色だけが PULSE に追従する。
+- **diff ビューアの syntax 配色**は PULSE に該当ロールが無いため、最も近いアクセントを借りている（`--syntax-kw` / `--syntax-num`）。
 
 ## 既知の割り切り
 
@@ -162,6 +186,7 @@ agentdeck/
 - PR 作成は **`origin` リモート＋認証済み `gh` CLI** が前提（push → `gh pr create`）。worktree 隔離セッションのみ対象。
 - デッキ復元は各セッションの**起動設定を再 spawn** するもの（ライブ端末出力・スクロールバックは復元しない）。worktree セッションは既存ディレクトリでシェルを開き直すが、保存情報と現在のGit状態が一致しない場合は安全な通常shellへ降格し、merge / PRを無効化する。
 - スケジュール起動は**アプリ起動中のみ**発火する（OS のタスクスケジューラには登録しない）。非起動中に過ぎた回はスキップされるが、「一回のみ」は起動時に**直近 5 分以内なら猶予発火**する。精度は ±30 秒。
+- シングルウィンドウ構成のため、ウィンドウを閉じると実行中の全セッションが終了する。実行中セッションがある場合は**閉じる前に確認**する（macOS の「閉じてもアプリは生存」慣習との差で黙って失わないように）。
 
 ## 次の一手（任意）
 
