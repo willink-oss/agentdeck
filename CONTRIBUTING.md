@@ -2,7 +2,7 @@
 
 ## 開発の前提
 
-- Node.js 18+（推奨 20 LTS）
+- Node.js 22.12+
 - macOS では Xcode Command Line Tools
 
 ## セットアップ
