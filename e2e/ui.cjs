@@ -27,6 +27,25 @@ const MOD = process.platform === 'darwin' ? 'Meta' : 'Control+Shift';
 setTimeout(() => { console.error('UI FAIL: global 5min deadline exceeded'); process.exit(1); }, 300000).unref();
 const ok = (cond, msg) => { if (!cond) throw new Error('UI FAIL: ' + msg); console.log('  ✓ ' + msg); };
 const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
+const realPathKey = (value) => {
+  try {
+    const resolveRealPath = fs.realpathSync.native || fs.realpathSync;
+    const key = resolveRealPath(String(value || '')).replace(/\\/g, '/').replace(/\/+$/, '');
+    return process.platform === 'win32' ? key.toLowerCase() : key;
+  } catch (_) { return ''; }
+};
+const fileIdentityKey = (value) => {
+  try {
+    const stat = fs.statSync(String(value || ''), { bigint: true });
+    return stat.ino ? `${stat.dev}:${stat.ino}` : '';
+  } catch (_) { return ''; }
+};
+const sameRealPath = (left, right) => {
+  const a = realPathKey(left), b = realPathKey(right);
+  if (a && b && a === b) return true;
+  const leftId = fileIdentityKey(left), rightId = fileIdentityKey(right);
+  return !!leftId && leftId === rightId;
+};
 
 /** Close the app but never let teardown decide the test's fate: a graceful close
  *  gets 15s, then the Electron child is SIGKILLed (the macOS CI runner has shown
@@ -140,6 +159,40 @@ async function closeHard(app) {
     await win.waitForFunction(() =>
       [...document.querySelectorAll('.pane.active .pane-name')].some((el) => el.textContent === 'wtkill'),
       null, { timeout: TIMEOUT });
+    // The pane becomes active before the async main-process spawn has resolved.
+    // Wait for the authoritative Git metadata to be saved instead of racing the
+    // worktree creation on slower platforms (notably Windows CI).
+    await win.waitForFunction(() => {
+      try {
+        const snapshot = JSON.parse(localStorage.getItem(Workspace.KEY) || 'null');
+        const session = snapshot && Array.isArray(snapshot.sessions)
+          ? snapshot.sessions.find((s) => s.name === 'wtkill')
+          : null;
+        return snapshot && snapshot.version === 2 && session && session.repoId &&
+          session.launchCwd && session.gitRoot && session.baseSha && session.branch &&
+          session.baseBranch && session.worktreePath;
+      } catch (_) { return false; }
+    }, null, { timeout: TIMEOUT });
+    const savedWt = await win.evaluate(() => {
+      const snapshot = JSON.parse(localStorage.getItem(Workspace.KEY));
+      return { snapshot, session: snapshot.sessions.find((s) => s.name === 'wtkill') };
+    });
+    const savedWtValid = savedWt.snapshot.version === 2 &&
+      sameRealPath(savedWt.session.repoId, repo) && sameRealPath(savedWt.session.launchCwd, repo) &&
+      sameRealPath(savedWt.session.gitRoot, repo) &&
+      savedWt.session.baseSha && savedWt.session.branch === 'agentdeck/e2e-killconfirm' &&
+      savedWt.session.baseBranch === 'main' && savedWt.session.worktreePath;
+    if (!savedWtValid) {
+      throw new Error(`UI FAIL: invalid saved worktree metadata: ${JSON.stringify({
+        repo, repoKey: realPathKey(repo), session: savedWt.session,
+        repoIdKey: realPathKey(savedWt.session.repoId),
+        launchCwdKey: realPathKey(savedWt.session.launchCwd),
+        gitRootKey: realPathKey(savedWt.session.gitRoot),
+        repoIdFile: fileIdentityKey(savedWt.session.repoId),
+        gitRootFile: fileIdentityKey(savedWt.session.gitRoot),
+      })}`);
+    }
+    ok(true, 'worktree launch saves v2 parent-repo/base/branch metadata');
     const paneCount = () => win.evaluate(() => document.querySelectorAll('.pane').length);
     const withWt = await paneCount();
     dialogAction = 'dismiss';
@@ -179,6 +232,13 @@ async function closeHard(app) {
     await win.waitForFunction(() =>
       (document.querySelector('.pane.active .pane-name') || {}).textContent === 'beta',
       null, { timeout: 10000 });
+    // Emit an explicit confirmation tail instead of depending on each runner's
+    // shell prompt theme; the attention path remains a real PTY/output flow.
+    await win.evaluate(() => {
+      const alpha = [...sessions.values()].find((s) => s.name === 'alpha');
+      window.deck.input(alpha.id, "printf '\\nProceed? [y/N] '");
+      window.deck.input(alpha.id, '\r');
+    });
     await win.waitForFunction(() => {
       const panes = [...document.querySelectorAll('.pane')];
       const alpha = panes.find((p) => p.querySelector('.pane-name').textContent === 'alpha');
@@ -252,10 +312,148 @@ async function closeHard(app) {
       null, { timeout: 10000 });
     ok(true, '「すべて表示」 clears the filter');
 
-    // -- layout switch ----------------------------------------------------------
-    await win.click('.ls-btn[data-cols="2"]');
-    ok(await win.evaluate(() => document.querySelector('#grid').style.gridTemplateColumns.includes('repeat(2')),
-      'layout switch applies a 2-column grid');
+    const setWindowMetrics = async (width, height, zoom) => {
+      const applied = await app.evaluate(({ BrowserWindow, screen }, metrics) => {
+        const bw = BrowserWindow.getAllWindows()[0];
+        const display = screen.getDisplayMatching(bw.getBounds());
+        const [outerWidth, outerHeight] = bw.getSize();
+        const [currentContentWidth, currentContentHeight] = bw.getContentSize();
+        const frameWidth = Math.max(0, outerWidth - currentContentWidth);
+        const frameHeight = Math.max(0, outerHeight - currentContentHeight);
+        // Hosted macOS runners expose a smaller desktop than 1440x920. Preserve
+        // the requested CSS viewport by scaling both the physical content size
+        // and Chromium zoom together; width*scale / (zoom*scale) is unchanged.
+        const maxContentWidth = Math.max(1, display.workArea.width - frameWidth - 16);
+        const maxContentHeight = Math.max(1, display.workArea.height - frameHeight - 16);
+        const scale = Math.min(1, maxContentWidth / metrics.width, maxContentHeight / metrics.height);
+        const contentWidth = Math.max(1, Math.floor(metrics.width * scale));
+        const contentHeight = Math.max(1, Math.floor(metrics.height * scale));
+        bw.setContentSize(contentWidth, contentHeight);
+        bw.webContents.setZoomFactor(metrics.zoom * scale);
+        return {
+          scale, contentWidth, contentHeight,
+          workArea: display.workArea,
+          zoomFactor: metrics.zoom * scale,
+        };
+      }, { width, height, zoom });
+      try {
+        await win.waitForFunction((expected) =>
+          Math.abs(window.innerWidth - expected.width / expected.zoom) < 30 &&
+          Math.abs(window.innerHeight - expected.height / expected.zoom) < 30,
+        { width, height, zoom }, { timeout: TIMEOUT });
+      } catch (err) {
+        const actual = await win.evaluate(() => ({
+          width: window.innerWidth, height: window.innerHeight,
+          devicePixelRatio: window.devicePixelRatio,
+        }));
+        throw new Error(`UI FAIL: window metrics did not settle: ${JSON.stringify({
+          requested: { width, height, zoom }, applied, actual,
+        })}`);
+      }
+    };
+
+    // -- fit layout: eight real PTYs stay inside the stage at 1440x920 ----------
+    // BrowserWindow's constructor size is an outer-window request and hosted
+    // runners can constrain it differently. Set the content viewport explicitly
+    // so this assertion measures the documented 1440x920 layout on every OS.
+    await setWindowMetrics(1440, 920, 1);
+    for (let i = 0; i < 6; i++) await launchShell(`fit-${i + 1}`, i % 2 ? repo : os.homedir());
+    await win.click('.ls-btn[data-cols="fit"]');
+    const collectFitState = () => win.evaluate(() => {
+      const host = document.querySelector('#grid');
+      const gridRect = host.getBoundingClientRect();
+      const items = [...host.querySelectorAll('.pane')].map((pane) => {
+        const rect = pane.getBoundingClientRect();
+        const head = pane.querySelector('.pane-head').getBoundingClientRect();
+        const termHost = pane.querySelector('.term-host').getBoundingClientRect();
+        const session = sessions.get(pane.dataset.id);
+        return {
+          left: Math.round(rect.left), top: Math.round(rect.top),
+          paneInside: rect.left >= gridRect.left - 1 && rect.right <= gridRect.right + 1 &&
+            rect.top >= gridRect.top - 1 && rect.bottom <= gridRect.bottom + 1,
+          headerInside: head.top >= rect.top - 1 && head.bottom <= rect.bottom + 1,
+          termHeight: termHost.height, rows: session.term.rows, cols: session.term.cols,
+        };
+      });
+      return {
+        mode: host.dataset.layout,
+        rows: new Set(items.map((item) => item.top)).size,
+        cols: new Set(items.map((item) => item.left)).size,
+        noScroll: host.scrollHeight <= host.clientHeight + 1 && host.scrollWidth <= host.clientWidth + 1,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        grid: {
+          width: gridRect.width, height: gridRect.height,
+          clientWidth: host.clientWidth, clientHeight: host.clientHeight,
+          scrollWidth: host.scrollWidth, scrollHeight: host.scrollHeight,
+        },
+        items,
+        savedMode: JSON.parse(localStorage.getItem(Workspace.KEY)).layout,
+        fitPressed: document.querySelector('.ls-btn[data-cols="fit"]').getAttribute('aria-pressed'),
+        autoPressed: document.querySelector('.ls-btn[data-cols="auto"]').getAttribute('aria-pressed'),
+      };
+    });
+    const fitReady = (state) => state.mode === 'fit' && state.savedMode === 'fit' &&
+      state.viewport.width >= 1410 && state.viewport.height >= 890 &&
+      state.cols === 2 && state.rows === 4 && state.noScroll &&
+      state.items.length === 8 && state.items.every((item) =>
+        item.paneInside && item.headerInside && item.termHeight > 0 && item.rows >= 8 && item.cols >= 30);
+    const fitDeadline = Date.now() + TIMEOUT;
+    let fitState = await collectFitState();
+    while (!fitReady(fitState) && Date.now() < fitDeadline) {
+      await win.waitForTimeout(100);
+      fitState = await collectFitState();
+    }
+    if (!fitReady(fitState)) {
+      throw new Error(`UI FAIL: fit layout did not settle: ${JSON.stringify(fitState)}`);
+    }
+    ok(true, 'fit layout keeps eight usable real terminals in a 2x4 grid');
+    ok(fitState.fitPressed === 'true' && fitState.autoPressed === 'false',
+      'layout buttons expose the selected state with aria-pressed');
+
+    // Remove only the six fit fixtures so deck persistence keeps alpha-x + beta.
+    await win.evaluate(() => {
+      for (const [id, s] of [...sessions]) {
+        if (s.name.startsWith('fit-')) { clearAttention(s); killSession(id); }
+      }
+    });
+    await win.waitForFunction(() => sessions.size === 2, null, { timeout: TIMEOUT });
+
+    // -- narrow/200% reflow: sidebars stack and every surface remains reachable --
+    await setWindowMetrics(900, 600, 1);
+    const narrowState = await win.evaluate(() => {
+      const reposRect = document.querySelector('#repos').getBoundingClientRect();
+      const sidebarRect = document.querySelector('#sidebar').getBoundingClientRect();
+      const stageRect = document.querySelector('#stage').getBoundingClientRect();
+      return {
+        media: matchMedia('(max-width: 960px)').matches,
+        noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+        stacked: reposRect.top < sidebarRect.top && sidebarRect.top < stageRect.top,
+      };
+    });
+    ok(narrowState.media && narrowState.noHorizontalOverflow && narrowState.stacked,
+      '900x600 reflows repositories, launch form, and stage without horizontal clipping');
+    await setWindowMetrics(1440, 920, 2);
+    const zoomState = await win.evaluate(() => {
+      const reachable = (selector) => {
+        const el = document.querySelector(selector);
+        el.scrollIntoView({ block: 'start' });
+        const rect = el.getBoundingClientRect();
+        return rect.top >= -1 && rect.top < window.innerHeight && rect.right <= window.innerWidth + 1;
+      };
+      const launchReachable = reachable('#launch');
+      const stageReachable = reachable('#stage');
+      return {
+        media: matchMedia('(max-width: 960px)').matches,
+        noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+        launchReachable, stageReachable,
+        terminalsSized: [...sessions.values()].every((s) => s.term.rows > 0 && s.term.cols > 0),
+      };
+    });
+    ok(zoomState.media && zoomState.noHorizontalOverflow && zoomState.launchReachable &&
+      zoomState.stageReachable && zoomState.terminalsSized,
+    '200% zoom reflows without clipping and keeps launch/stage/terminals reachable');
+    await setWindowMetrics(1440, 920, 1);
+    await win.evaluate(() => window.scrollTo(0, 0));
 
     // -- terminal context menu ----------------------------------------------------
     await win.click('.pane .term-host', { button: 'right' });
@@ -279,6 +477,24 @@ async function closeHard(app) {
     ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 6, 'custom preset lands in the select');
     await win.keyboard.press('Escape');
 
+    // Keep one real worktree session across the restart. Deck v2 must restore it
+    // as a child of svc-a and retain the original diff/merge metadata.
+    await win.selectOption('#preset', 'shell');
+    await win.fill('#name', 'wtpersist');
+    await win.fill('#cwd', repo);
+    await win.check('#wt-enable');
+    await win.fill('#wt-branch', 'agentdeck/e2e-persist');
+    await win.click('#launch');
+    await win.waitForFunction(() =>
+      (document.querySelector('.pane.active .pane-name') || {}).textContent === 'wtpersist',
+      null, { timeout: TIMEOUT });
+    const persistWorktree = await win.evaluate(() =>
+      [...sessions.values()].find((s) => s.name === 'wtpersist').worktreePath);
+    fs.writeFileSync(path.join(persistWorktree, 'restored.txt'), 'survives restart\n');
+    git(persistWorktree, 'add', 'restored.txt');
+    git(persistWorktree, 'commit', '-m', 'persisted worktree change');
+    const persistHead = git(persistWorktree, 'rev-parse', 'HEAD');
+
     // -- real restart: layout + presets persist; the saved deck restores -------------
     // a full close + relaunch (same user-data-dir), not win.reload(): reload keeps the
     // main process alive, orphaning the live PTYs (a state real usage can't produce —
@@ -287,21 +503,85 @@ async function closeHard(app) {
     app = await launchApp();
     await attachWindow();
     ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 6, 'restart: custom preset persisted');
-    ok(await win.evaluate(() => document.querySelector('#grid').style.gridTemplateColumns.includes('repeat(2')),
-      'restart: layout choice persisted');
+    ok(await win.evaluate(() => document.querySelector('#grid').dataset.layout) === 'fit',
+      'restart: fit layout choice persisted');
     await win.waitForFunction(() => {
       const b = document.querySelector('#restore-deck');
-      return b && !b.hidden && b.textContent.includes('(2)');
+      return b && !b.hidden && b.textContent.includes('(3)');
     }, null, { timeout: TIMEOUT });
     await win.click('#restore-deck');
-    // restore launches sequentially and ends by activating the last config (beta) —
+    // restore launches sequentially and ends by activating the last config (wtpersist) —
     // waiting for that means every spawn has settled before we close the app
     await win.waitForFunction(() =>
-      document.querySelectorAll('.pane').length === 2 &&
-      (document.querySelector('.pane.active .pane-name') || {}).textContent === 'beta',
+      document.querySelectorAll('.pane').length === 3 &&
+      (document.querySelector('.pane.active .pane-name') || {}).textContent === 'wtpersist',
       null, { timeout: TIMEOUT });
     const names = await win.evaluate(() => [...document.querySelectorAll('.pane .pane-name')].map((el) => el.textContent));
-    ok(names.includes('alpha-x') && names.includes('beta'), `restore: deck re-spawned with kept names (${names.join(',')})`);
+    ok(names.includes('alpha-x') && names.includes('beta') && names.includes('wtpersist'),
+      `restore: deck re-spawned with kept names (${names.join(',')})`);
+    const restoredWt = await win.evaluate((repoId) => {
+      const s = [...sessions.values()].find((entry) => entry.name === 'wtpersist');
+      const group = document.querySelector(`.repo-item[data-repo-id="${CSS.escape(repoId)}"]`);
+      const grouped = !!(group && [...group.querySelectorAll('.repo-session-name')]
+        .some((el) => el.textContent === 'wtpersist'));
+      return {
+        ok: !!(s && s.repoId === repoId && s.gitRoot && s.baseSha && s.worktreePath &&
+          s.branch === 'agentdeck/e2e-persist' && grouped),
+        session: s && {
+          repoId: s.repoId, gitRoot: s.gitRoot, baseSha: s.baseSha,
+          worktreePath: s.worktreePath, branch: s.branch, baseBranch: s.baseBranch,
+        },
+        grouped,
+        repoMessage: document.querySelector('#repo-msg').textContent,
+      };
+    }, repo);
+    ok(restoredWt.ok, 'restart: restored worktree stays grouped under its parent repo with diff metadata' +
+      (restoredWt.ok ? '' : ' ' + JSON.stringify(restoredWt)));
+    const staleRestore = await win.evaluate(async (wrongBase) => {
+      const good = [...sessions.values()].find((entry) => entry.name === 'wtpersist');
+      let safe = true;
+      for (const baseSha of ['', wrongBase]) {
+        const result = await launch({
+          presetKey: 'shell', command: '', name: 'stale-restore', cwd: good.worktreePath,
+          worktree: false, branch: '',
+          restoreMeta: {
+            gitCwd: good.worktreePath, launchCwd: good.launchCwd, repoId: good.repoId,
+            baseSha, branch: good.branch, baseBranch: good.baseBranch, gitRoot: good.gitRoot,
+            worktreePath: good.worktreePath,
+          },
+        });
+        const stale = sessions.get(result.id);
+        safe = safe && !!(result.ok && stale && !stale.gitRoot && !stale.worktreePath);
+        if (stale) { clearAttention(stale); killSession(stale.id); }
+      }
+      focusSession(good.id);
+      return safe;
+    }, persistHead);
+    ok(staleRestore, 'missing or forged non-merge-base restore hints open only safe shells');
+    await win.click('.pane.active .pane-diff');
+    await win.waitForFunction(() => !document.querySelector('#diff-overlay').hidden, null, { timeout: TIMEOUT });
+    ok(await win.evaluate(() => !document.querySelector('#diff-merge').hidden),
+      'restart: restored worktree still offers merge/PR actions');
+    await win.waitForFunction(() => document.querySelector('#diff-body').textContent.includes('restored.txt'),
+      null, { timeout: TIMEOUT });
+    ok(true, 'restart: diff still uses the saved base and shows committed worktree changes');
+    const rejectedMerge = await win.evaluate(() => window.deck.gitMerge('not-a-live-session'));
+    ok(!rejectedMerge.ok, 'main process rejects an unknown Git session before merge');
+    git(repo, 'switch', '-c', 'unexpected-base');
+    const changedContext = await win.evaluate(() => {
+      const s = [...sessions.values()].find((entry) => entry.name === 'wtpersist');
+      return window.deck.gitMerge(s.id);
+    });
+    ok(!changedContext.ok, 'main process rejects merge after the base checkout branch changes');
+    git(repo, 'switch', 'main');
+    git(repo, 'branch', '-D', 'unexpected-base');
+    await win.click('#diff-merge');
+    await win.waitForFunction(() => document.querySelector('#diff-meta').textContent.startsWith('✓ merged'),
+      null, { timeout: TIMEOUT });
+    const mergedFile = fs.readFileSync(path.join(repo, 'restored.txt'), 'utf8').replace(/\r\n/g, '\n');
+    ok(mergedFile === 'survives restart\n' &&
+      /agentdeck\/e2e-persist/.test(git(repo, 'log', '-1', '--pretty=%s')),
+    'restart: validated worktree branch merges successfully into the base checkout');
 
     console.log('UI PASS');
   } finally {

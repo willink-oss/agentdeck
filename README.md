@@ -20,7 +20,7 @@
 5. **入力待ち検知 + 通知** — 出力停止をターミナル末尾の内容で分類し、**プロンプト/確認質問なら約3秒で「要対応」点灯**、作業中表示（スピナー・esc to interrupt）は抑制、判断材料なしは12秒。非アクティブ時はOS通知
 6. **マルチリポジトリ管理** — サイドバーにリポを登録し、リポ単位で branch / diff-stat / worktree を表示。選択リポのセッションだけにステージを絞る**フォーカスフィルタ**、ダブルクリック即起動、PC全体で起動できる **⌂Home 常設エントリ**
 7. **diff からのマージ / PR** — worktree 隔離セッションの成果を、diff ドロワーから**ローカルマージ**（「merge ↩ base」＝`git merge --no-ff`）または **GitHub PR 作成**（「PR 作成」＝push → `gh pr create`）で取り込み
-8. **ステージ操作** — グリッドの列数切替（auto/1/2/3・永続化）、ペインのドラッグ並べ替え、起動中デッキの保存＆**再起動後に「↻ 前回のデッキを復元」**で再 spawn
+8. **ステージ操作** — グリッド切替（auto/**fit**/1/2/3・永続化）。**fit は8ペインを標準ウィンドウで2列×4行に収め**、通常モードで高さを超えた場合もスクロール可能。900px以下／200%拡大時は3カラムを縦にreflowし、端末行を潰さずスクロールで到達可能。ペインのドラッグ並べ替え、起動中デッキの保存＆**再起動後に「↻ 前回のデッキを復元」**で再 spawn。Deck v2 は worktree の親リポジトリ・起動時base/branchも保持し、mainプロセスが現在のGit common-dir・worktree・両branch・merge-baseを再検証してからrepo分類・diff・merge・PRを再有効化
 9. **エージェント・プリセット管理** — Agent 横の ⚙ から**カスタムプリセット（表示名＋起動コマンド）を追加・編集・削除**。Aider 等の任意 CLI をコード変更なしで登録でき、select と Quick launch チップに反映（localStorage 永続）。さらにプリセットごとに**起動後コマンド（init）**を設定でき、エージェント起動が落ち着いてから `/effort ultracode` のようなスラッシュコマンドを自動入力（ビルトインの claude / agy にも設定可・毎回の手入力を省略）
 10. **キーボード操作** — ペイン移動（1–9）・前後循環（[ ]）・クイック起動（Enter）・終了（W）・**コマンドパレット（K・fuzzy 検索でセッションへジャンプ）**。修飾キーは macOS が **⌘**、Windows / Linux が **Ctrl+Shift**（素の Ctrl はシェル/readline のキーのため、ターミナルアプリの慣習に準拠）
 11. **スケジュール起動（⏰）** — 「リポジトリ × エージェント × 時刻」を登録すると指定時刻にセッションを自動起動。繰り返し（一回のみ / 毎日 / 曜日指定）、worktree 隔離（発火ごとに日時付きブランチで一意化）、有効/無効トグル・次回発火表示・起動時の OS 通知に対応。Agent 横の ⏰ かリポジトリ行の ⏰ から登録（`userData/schedules.json` に永続化、スケジューラは main プロセス常駐で 30 秒間隔の壁時計照合 — スリープ復帰でも取りこぼし/二重発火なし）
@@ -129,8 +129,8 @@ agentdeck/
 │   ├── attention.js     #   shouldFlagAttention
 │   ├── repos.js         #   normalizePath / addRepo / findRepo / effectiveRepos / findEff
 │   ├── gitstat.js       #   parseNumstat / parseWorktreeList / formatStat
-│   ├── layout.js        #   normalizeLayoutMode / gridTemplateFor（グリッド列数）
-│   ├── workspace.js     #   toConfig / normalize（デッキ保存/復元）
+│   ├── layout.js        #   normalizeLayoutMode / gridTemplateFor / gridAutoRowsFor
+│   ├── workspace.js     #   Deck v2（レイアウト＋repo/worktree metadata）の保存/復元
 │   ├── fuzzy.js         #   score（⌘K パレットの部分列マッチ）
 │   ├── version.js       #   compare / isNewer（アップデートチェック）
 │   ├── presets.js       #   ビルトイン定義 + validate / keyFor / merge（プリセット管理）
@@ -150,7 +150,7 @@ agentdeck/
 │   └── styles.css
 ├── e2e/
 │   └── smoke.cjs        # CI 用ヘッドレス起動スモーク（3 OS・起動/preload/IPC/node-pty）
-└── test/                # node --test 用ユニットテスト（164 cases）
+└── test/                # node --test 用ユニットテスト
 ```
 
 ## 既知の割り切り
@@ -160,11 +160,13 @@ agentdeck/
 - 入力待ち検知はヒューリスティック（出力停止＋末尾分類）。プロンプト/質問は素早く、不明なケースは保守的に点灯するが、誤検知は依然あり得る。
 - merge はローカル `git merge --no-ff` のみ（**コミット済み履歴**が対象。未コミット分はセッション内で commit してから）。コンフリクト時は `git merge --abort` で原状復帰。
 - PR 作成は **`origin` リモート＋認証済み `gh` CLI** が前提（push → `gh pr create`）。worktree 隔離セッションのみ対象。
-- デッキ復元は各セッションの**起動設定を再 spawn** するもの（ライブ端末出力・スクロールバックは復元しない）。worktree セッションは既存の worktree ディレクトリでシェルを開き直す。
+- デッキ復元は各セッションの**起動設定を再 spawn** するもの（ライブ端末出力・スクロールバックは復元しない）。worktree セッションは既存ディレクトリでシェルを開き直すが、保存情報と現在のGit状態が一致しない場合は安全な通常shellへ降格し、merge / PRを無効化する。
 - スケジュール起動は**アプリ起動中のみ**発火する（OS のタスクスケジューラには登録しない）。非起動中に過ぎた回はスキップされるが、「一回のみ」は起動時に**直近 5 分以内なら猶予発火**する。精度は ±30 秒。
 
 ## 次の一手（任意）
 
+- SSHから同じライブセッションへ再接続する用途には、direct PTYに加えて任意のtmuxバックエンド（GUI終了＝detach、明示終了＝terminate）を追加する
+- tmux実装後、同じbackend契約の上にZellij 0.44系のpane制御／read-only watchを追加する
 - 配布を絞るなら Tauri + `portable-pty`（Rust）へ移植
 
 ## コントリビュート / ライセンス

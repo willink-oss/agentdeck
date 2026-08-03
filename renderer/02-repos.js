@@ -7,13 +7,13 @@ function normRepoPath(p) { return Repos.normalizePath(p); }
 function effectiveRepos() { return Repos.effectiveRepos(repos, homeRepo); }
 function findEff(id) { return Repos.findEff(repos, homeRepo, id); }
 function repoIdForCwd(dir) {
-  const hit = findEff(normRepoPath(dir));
+  const hit = Repos.findForPath(repos, homeRepo, normRepoPath(dir));
   return hit ? hit.id : null;
 }
 /** Re-derive every live session's repoId from its launch dir, so sessions snap
  *  into (or out of) a repo group whenever the registry changes. */
 function retagSessions() {
-  for (const s of sessions.values()) s.repoId = repoIdForCwd(s.launchCwd);
+  for (const s of sessions.values()) s.repoId = repoIdForCwd(s.repoMatchCwd || s.launchCwd);
 }
 function flashRepoMsg(text) {
   if (!repoMsgEl) return;

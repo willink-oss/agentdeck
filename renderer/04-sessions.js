@@ -1,8 +1,9 @@
 'use strict';
 
 // ---- session creation ------------------------------------------------------
-async function launch({ presetKey, command, name, cwd, worktree, branch }) {
+async function launch({ presetKey, command, name, cwd, worktree, branch, restoreMeta }) {
   const preset = PRESETS[presetKey] || PRESETS.shell;
+  const restored = restoreMeta || {};
   const id = 'sess_' + (++seq) + '_' + Math.random().toString(36).slice(2, 6);
   const displayName = name || `${preset.label} #${seq}`;
   const workdir = cwd || cwdInput.value.trim() || '';
@@ -66,8 +67,9 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
   const s = {
     id, term, fit, search, el: pane, ro, name: displayName,
     alive: true, hasOutput: false, attention: false, lastData: Date.now(),
-    gitCwd: null, baseSha: null, branch: null, gitRoot: null, worktreePath: null,
-    repoId: repoIdForCwd(workdir), launchCwd: workdir,
+    // Saved Git metadata remains untrusted until pty:spawn validates it in main.
+    gitCwd: null, baseSha: null, branch: null, baseBranch: null, gitRoot: null, worktreePath: null,
+    repoId: repoIdForCwd(workdir), repoMatchCwd: workdir, launchCwd: workdir,
     presetKey, command,            // remembered so the deck can be saved + re-spawned
   };
   sessions.set(id, s);
@@ -90,38 +92,68 @@ async function launch({ presetKey, command, name, cwd, worktree, branch }) {
     // every entry point (form, chips, deck restore, schedule) gets them for free
     initCommands: (preset.init && preset.init.length) ? preset.init : [],
     worktree: { enabled: wantWorktree, branch: wtName },
+    restoreGit: restored.worktreePath ? {
+      baseSha: restored.baseSha, branch: restored.branch, baseBranch: restored.baseBranch,
+      gitRoot: restored.gitRoot,
+      worktreePath: restored.worktreePath,
+    } : null,
   });
 
   // the pane can be killed (kill button / chord+W / restore) during the spawn await;
   // killSession() then disposed `term` and removed the session — bail before touching them
-  if (!sessions.has(id)) return;
+  if (!sessions.has(id)) {
+    // pty:kill may have raced ahead of the async spawn's registration. Once a
+    // successful invoke resolves, a second idempotent kill closes that orphan.
+    if (res && res.ok) window.deck.kill(id);
+    return { ok: false, id, error: 'cancelled' };
+  }
 
   if (!res || !res.ok) {
     term.write(`\r\n\x1b[31m[failed: ${res ? res.error : 'unknown'}]\x1b[0m\r\n`);
     setExited(id);
     diffBtn.disabled = true;
-    return;
+    return { ok: false, id, error: res ? res.error : 'unknown' };
   }
 
   if (res.git) {
     s.gitCwd = res.git.cwd;
+    // The main process has re-derived these fields from live Git state. Never
+    // prefer localStorage metadata here: it may be stale or renderer-forged.
     s.baseSha = res.git.baseSha;
     s.branch = res.git.branch;
-    s.gitRoot = res.git.root || null;        // present only for worktree-isolated sessions
+    s.baseBranch = res.git.baseBranch || null;
+    s.gitRoot = res.git.root || null; // present only for validated worktree-isolated sessions
     s.worktreePath = res.git.worktree || null;
-    if (res.git.worktree) {
-      head.querySelector('.pane-cwd').textContent = `⌥ ${res.git.branch}`;
-      head.querySelector('.pane-cwd').title = res.git.worktree;
-    } else if (res.git.branch) {
+    s.repoId = res.repoId || res.git.repoId || (res.git.restored ? repoIdForCwd(res.git.root) : repoIdForCwd(s.launchCwd));
+    const registeredForResult = s.repoId ? findEff(s.repoId) : null;
+    s.repoMatchCwd = res.repoCwd || (registeredForResult && (registeredForResult.realPath || registeredForResult.path)) ||
+      res.canonicalCwd || s.launchCwd;
+    if (res.git.restored) {
+      const registered = s.repoId ? findEff(s.repoId) : null;
+      s.launchCwd = registered ? registered.path : res.git.root;
+    }
+    if (s.worktreePath) {
+      head.querySelector('.pane-cwd').textContent = `⌥ ${s.branch}`;
+      head.querySelector('.pane-cwd').title = s.worktreePath;
+    } else if (s.branch) {
       head.querySelector('.pane-cwd').title = res.git.cwd;
     }
+    if (res.git.restoreRejected) flashRepoMsg(t('deck.restoreMetadataRejected', { name: s.name }));
   } else {
+    s.repoId = res.repoId || repoIdForCwd(res.canonicalCwd || s.launchCwd);
+    const registered = s.repoId ? findEff(s.repoId) : null;
+    s.repoMatchCwd = res.repoCwd || (registered && (registered.realPath || registered.path)) ||
+      res.canonicalCwd || s.launchCwd;
     diffBtn.disabled = true;
     diffBtn.title = t('form.notRepo');
   }
+  // spawn may canonicalise a symlinked cwd or validate a restored worktree back
+  // to its parent repository; rebuild the sidebar with that authoritative tag.
+  renderRepos();
   term.focus();
   markActive(id);
   saveWorkspace(); // remember this session (cwd/git info now resolved) for restore
+  return { ok: true, id };
 }
 
 function killSession(id) {

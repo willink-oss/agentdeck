@@ -19,7 +19,7 @@ function closeDiff() { diffOverlay.hidden = true; diffSessionId = null; }
 async function renderDiff(s) {
   diffMeta.textContent = t('diff.loading');
   diffBody.innerHTML = '';
-  const res = await window.deck.gitDiff(s.gitCwd, s.baseSha);
+  const res = await window.deck.gitDiff(s.id);
   if (!res || !res.ok) {
     diffMeta.textContent = res ? res.error : t('diff.failed');
     return;
@@ -102,7 +102,7 @@ diffMerge.addEventListener('click', async () => {
   if (!confirm(t('diff.confirmMerge', { branch: s.branch }))) return;
   diffMerge.disabled = true;
   diffMeta.textContent = t('diff.merging', { branch: s.branch });
-  const res = await window.deck.gitMerge({ root: s.gitRoot, branch: s.branch, worktree: s.worktreePath });
+  const res = await window.deck.gitMerge(s.id);
   if (!res || !res.ok) {
     diffMeta.textContent = '⚠ ' + (res ? res.error : t('diff.mergeFailed'));
     diffMerge.disabled = false;
@@ -117,7 +117,7 @@ diffPr.addEventListener('click', async () => {
   if (!confirm(t('diff.confirmPr', { branch: s.branch }))) return;
   diffPr.disabled = diffMerge.disabled = true;
   diffMeta.textContent = t('diff.creatingPr', { branch: s.branch });
-  const res = await window.deck.gitPr({ root: s.gitRoot, branch: s.branch, worktree: s.worktreePath });
+  const res = await window.deck.gitPr(s.id);
   diffPr.disabled = diffMerge.disabled = false;
   if (!res || !res.ok) { diffMeta.textContent = '⚠ ' + (res ? res.error : t('diff.prFailed')); return; }
   diffMeta.textContent = res.url ? t('diff.prCreated', { url: res.url }) : t('diff.prCreatedNoUrl');
