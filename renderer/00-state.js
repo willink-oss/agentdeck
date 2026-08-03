@@ -7,7 +7,8 @@
 const Presets = window.Presets;
 let customPresets = loadCustomPresets();
 let presetInit = loadPresetInit();
-let PRESETS = Presets.merge(customPresets, presetInit);
+let presetOverrides = loadPresetOverrides();
+let PRESETS = Presets.merge(customPresets, presetInit, presetOverrides);
 
 function loadCustomPresets() {
   try { return Presets.normalizeCustom(JSON.parse(localStorage.getItem(Presets.KEY) || '[]')); }
@@ -30,6 +31,29 @@ function loadPresetInit() {
 }
 function savePresetInit() {
   try { localStorage.setItem(Presets.KEY_INIT, JSON.stringify(presetInit)); } catch (_) {}
+}
+/* Edits to the built-in presets (base command / per-profile arguments). Stored
+ * apart from the built-in table so "reset to default" is a deletion and the
+ * defaults are always recoverable — and so an older build, which never reads
+ * this key, simply sees the stock presets instead of breaking. */
+function loadPresetOverrides() {
+  try {
+    return Presets.normalizeOverrides(
+      JSON.parse(localStorage.getItem(Presets.KEY_OVERRIDES) || '{}'),
+      customPresets.map((p) => p.key),
+    );
+  } catch (_) { return {}; }
+}
+function savePresetOverrides() {
+  try { localStorage.setItem(Presets.KEY_OVERRIDES, JSON.stringify(presetOverrides)); } catch (_) {}
+}
+/** The command a launch will actually type, for a preset + profile. */
+function commandFor(presetKey, profileId) {
+  return Presets.resolveCommand(presetKey, profileId, PRESETS, presetOverrides);
+}
+/** Whether that command hands the agent unattended write/exec authority. */
+function profileIsDangerous(presetKey, profileId) {
+  return Presets.isDangerous(presetKey, profileId, PRESETS, presetOverrides);
 }
 
 /**

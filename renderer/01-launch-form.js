@@ -24,7 +24,7 @@ function buildQuickChips() {
 /** Re-merge + redraw the select and chips after a custom-preset change, keeping
  *  the user's current selection (and typed command) when it still exists. */
 function rebuildPresetUI() {
-  PRESETS = Presets.merge(customPresets, presetInit);
+  PRESETS = Presets.merge(customPresets, presetInit, presetOverrides);
   const prevKey = presetSel.value;
   const prevCmd = commandInput.value;
   buildPresetOptions(); // resets the selection to the claude default

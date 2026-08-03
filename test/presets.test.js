@@ -72,7 +72,14 @@ test('normalizeCustom: round-trips its own output', () => {
 test('merge: built-ins always present and never overridden', () => {
   const merged = P.merge([{ key: 'custom-aider', label: 'Aider', cmd: 'aider' }]);
   assert.equal(merged.shell.label, 'Plain shell');
-  assert.deepEqual(merged['custom-aider'], { label: 'Aider', cmd: 'aider', badge: 'AIDER', init: [] });
+  const aider = merged['custom-aider'];
+  assert.equal(aider.label, 'Aider');
+  assert.equal(aider.cmd, 'aider');
+  assert.equal(aider.badge, 'AIDER');
+  assert.deepEqual(aider.init, []);
+  // a custom preset has no variants of its own, but still exposes the default
+  assert.deepEqual(aider.profiles, [{ id: 'default', args: '', danger: false }]);
+  assert.equal(aider.overridden, false);
   // built-ins keep their explicit badges
   assert.equal(merged.antigravity.badge, 'ANTIGRAVITY');
   // every entry carries an init array (empty when unconfigured)
