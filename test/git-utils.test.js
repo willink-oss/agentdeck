@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { defaultShell, sanitizeBranch, worktreeFolderName } = require('../lib/git-utils');
+const { defaultShell, sanitizeBranch, worktreeFolderName, isFullCommitHash } = require('../lib/git-utils');
 
 test('defaultShell: Windows -> PowerShell', () => {
   assert.equal(defaultShell('win32', {}), 'powershell.exe');
@@ -70,4 +70,12 @@ test('sanitizeBranch: emits a git-valid ref (no "..", trailing ".", or ".lock")'
 test('worktreeFolderName: combines repo + branch and flattens slashes', () => {
   assert.equal(worktreeFolderName('myrepo', 'agentdeck/claude-1'), 'myrepo__agentdeck-claude-1');
   assert.equal(worktreeFolderName('tsuu', 'feature/x'), 'tsuu__feature-x');
+});
+
+test('isFullCommitHash: accepts only full SHA-1/SHA-256 object ids', () => {
+  assert.equal(isFullCommitHash('a'.repeat(40)), true);
+  assert.equal(isFullCommitHash('ABCDEF12'.repeat(8)), true);
+  for (const value of ['abc1234', 'HEAD~1', '-' + 'a'.repeat(39), 'g'.repeat(40), '', null]) {
+    assert.equal(isFullCommitHash(value), false, String(value));
+  }
 });

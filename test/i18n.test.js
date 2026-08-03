@@ -128,7 +128,7 @@ test('html parity: every data-i18n* key in index.html exists in the dictionary',
   const path = require('node:path');
   const html = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'index.html'), 'utf8');
   const keys = new Set();
-  for (const m of html.matchAll(/\bdata-i18n(?:-ph|-title)?="([^"]+)"/g)) keys.add(m[1]);
+  for (const m of html.matchAll(/\bdata-i18n(?:-ph|-title|-aria-label)?="([^"]+)"/g)) keys.add(m[1]);
   const missing = [...keys].filter((k) => !I18n.DICT[k]);
   assert.deepEqual(missing, [], 'index.html references keys absent from lib/i18n.js: ' + missing.join(', '));
   assert.ok(keys.size >= 40, `expected the chrome to be broadly keyed, got ${keys.size}`);

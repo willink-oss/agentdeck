@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   normalizePath, repoNameFromPath, makeRepo, addRepo, removeRepo, findRepo,
-  effectiveRepos, findEff,
+  effectiveRepos, findEff, findForPath,
 } = require('../lib/repos');
 
 test('normalizePath: strips trailing separators', () => {
@@ -122,4 +122,43 @@ test('findEff: pinned wins on collision, falls back to findRepo, null on miss', 
   assert.equal(findEff(list, HOME, '/c/d').id, '/c/d');     // persisted found
   assert.equal(findEff(list, HOME, '/nope'), null);         // miss
   assert.equal(findEff(list, null, '/c/d').id, '/c/d');     // no pinned -> findRepo
+});
+
+test('findForPath: exact and nested working directories map to a registered repo', () => {
+  const list = addRepo([], '/work/service');
+  assert.equal(findForPath(list, HOME, '/work/service').id, '/work/service');
+  assert.equal(findForPath(list, HOME, '/work/service/src/api').id, '/work/service');
+  assert.equal(findForPath(list, HOME, '/work/service-other'), null, 'prefix must end at a path boundary');
+});
+
+test('findForPath: longest registered prefix wins for nested repositories', () => {
+  const list = addRepo(addRepo([], '/work/platform'), '/work/platform/mobile');
+  assert.equal(findForPath(list, HOME, '/work/platform/mobile/src').id, '/work/platform/mobile');
+  assert.equal(findForPath(list, HOME, '/work/platform/api').id, '/work/platform');
+});
+
+test('findForPath: Home is exact-only; Windows separators are treated as boundaries', () => {
+  const list = addRepo([], 'C:\\src\\app');
+  assert.equal(findForPath(list, HOME, '/home'), HOME);
+  assert.equal(findForPath(list, HOME, '/home/Downloads'), null);
+  assert.equal(findForPath(list, null, 'C:\\src\\app\\packages\\ui').id, 'C:\\src\\app');
+});
+
+test('findForPath: collapses dot segments and case-folds Windows paths', () => {
+  const posix = addRepo([], '/work/service');
+  assert.equal(findForPath(posix, null, '/work/service/src/../api').id, '/work/service');
+  assert.equal(findForPath(posix, null, '/work/service/../other'), null);
+  const windows = addRepo([], 'C:\\Src\\App');
+  assert.equal(findForPath(windows, null, 'c:/src/app/PACKAGES/../ui').id, 'C:\\Src\\App');
+});
+
+test('findForPath: a registered POSIX root owns absolute descendants', () => {
+  const root = addRepo([], '/');
+  assert.equal(findForPath(root, null, '/var/tmp').id, '/');
+});
+
+test('findForPath: canonical realPath keeps symlink aliases attached', () => {
+  const repo = { id: '/alias/app', path: '/alias/app', realPath: '/real/projects/app', name: 'app' };
+  assert.equal(findForPath([repo], null, '/real/projects/app/src'), repo);
+  assert.equal(findForPath([repo], null, '/alias/app/src'), repo);
 });

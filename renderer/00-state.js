@@ -132,6 +132,7 @@ function applyI18n(root) {
   for (const el of r.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   for (const el of r.querySelectorAll('[data-i18n-ph]')) el.setAttribute('placeholder', t(el.dataset.i18nPh));
   for (const el of r.querySelectorAll('[data-i18n-title]')) el.setAttribute('title', t(el.dataset.i18nTitle));
+  for (const el of r.querySelectorAll('[data-i18n-aria-label]')) el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
 }
 function setKbdHint() {
   const el = $('#kbd-hint');

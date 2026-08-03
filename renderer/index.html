@@ -19,7 +19,7 @@
           <button type="button" id="repo-add" data-i18n-title="repos.add" title="Add repository (folder)">+</button>
         </div>
       </div>
-      <div id="repo-msg" class="repo-msg" hidden></div>
+      <div id="repo-msg" class="repo-msg" role="status" aria-live="polite" hidden></div>
       <div id="repo-list" class="repo-list"></div>
       <div id="repo-empty" class="repo-empty">
         <p data-i18n="repos.empty">リポジトリ未登録</p>
@@ -108,11 +108,13 @@
           <span id="stage-filter-label"></span>
           <button type="button" id="stage-all" class="sf-all" data-i18n="stage.showAll">すべて表示</button>
         </div>
-        <div id="layout-switch" class="layout-switch" data-i18n-title="layout.title" title="グリッドの列数">
-          <button type="button" class="ls-btn active" data-cols="auto">auto</button>
-          <button type="button" class="ls-btn" data-cols="1">1</button>
-          <button type="button" class="ls-btn" data-cols="2">2</button>
-          <button type="button" class="ls-btn" data-cols="3">3</button>
+        <div id="layout-switch" class="layout-switch" role="group"
+             data-i18n-title="layout.title" data-i18n-aria-label="layout.title" title="グリッドの列数">
+          <button type="button" class="ls-btn active" data-cols="auto" aria-pressed="true">auto</button>
+          <button type="button" class="ls-btn" data-cols="fit" aria-pressed="false" data-i18n="layout.fit">全体</button>
+          <button type="button" class="ls-btn" data-cols="1" aria-pressed="false">1</button>
+          <button type="button" class="ls-btn" data-cols="2" aria-pressed="false">2</button>
+          <button type="button" class="ls-btn" data-cols="3" aria-pressed="false">3</button>
         </div>
       </div>
       <div id="empty" class="empty">
@@ -120,7 +122,8 @@
           <span class="empty-mark">&#x259A;&#x259A;&#x259A;</span>
           <h2 id="empty-title" data-i18n="empty.title">No agents running</h2>
           <p id="empty-desc" data-i18n="empty.desc">左のパネルからエージェントを起動すると、ここにターミナルが並びます。複数立ち上げれば並列で監視できます。</p>
-          <button type="button" id="restore-deck" class="restore-deck" hidden></button>
+          <button type="button" id="restore-deck" class="restore-deck" hidden
+                  aria-label="前回のデッキを復元" data-i18n-aria-label="deck.restoreLabel"></button>
         </div>
       </div>
       <div id="grid"></div>

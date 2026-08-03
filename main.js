@@ -8,7 +8,7 @@ const https = require('https');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const pty = require('node-pty');
-const { defaultShell, sanitizeBranch, worktreeFolderName } = require('./lib/git-utils');
+const { defaultShell, sanitizeBranch, worktreeFolderName, isFullCommitHash } = require('./lib/git-utils');
 const Repos = require('./lib/repos');
 const GitStat = require('./lib/gitstat');
 const Version = require('./lib/version');
@@ -19,6 +19,9 @@ const pexec = promisify(execFile);
 
 /** @type {Map<string, import('node-pty').IPty>} */
 const ptys = new Map();
+/** Authoritative Git metadata keyed by the renderer's opaque session id. Paths,
+ *  refs, and bases in privileged Git IPC are read only from this map. */
+const gitContexts = new Map();
 
 const shellForHost = () => defaultShell(process.platform, process.env);
 
@@ -36,6 +39,108 @@ async function headSha(dir) { return (await git(['rev-parse', 'HEAD'], dir)).tri
 async function currentBranch(dir) {
   try { return (await git(['rev-parse', '--abbrev-ref', 'HEAD'], dir)).trim(); }
   catch (_) { return ''; }
+}
+
+/** Resolve an existing path through symlinks/case aliases. All worktree restore
+ *  metadata originates in renderer localStorage, so paths are untrusted until
+ *  they have passed this main-process canonicalisation. */
+function canonicalPath(dir) {
+  try { return Repos.normalizePath(fs.realpathSync(String(dir || ''))); }
+  catch (_) { return ''; }
+}
+function pathKey(dir) {
+  const p = Repos.normalizePath(dir).replace(/\\/g, '/');
+  return process.platform === 'win32' ? p.toLowerCase() : p;
+}
+function samePath(a, b) { return !!a && !!b && pathKey(a) === pathKey(b); }
+async function commonGitDir(dir) {
+  const raw = (await git(['rev-parse', '--git-common-dir'], dir)).trim();
+  return canonicalPath(path.isAbsolute(raw) ? raw : path.resolve(dir, raw));
+}
+async function commitExists(dir, sha) {
+  if (!isFullCommitHash(sha)) return false;
+  try { await git(['cat-file', '-e', `${sha}^{commit}`], dir); return true; }
+  catch (_) { return false; }
+}
+
+/** Re-establish the identity of a saved worktree using live Git state. This is
+ *  also called immediately before merge/PR, so stale or renderer-forged metadata
+ *  can never select a different repository or branch for a destructive action. */
+async function validateWorktreeIdentity({ root, branch, baseBranch, worktree, baseSha, expectedCwd } = {}) {
+  const rootReal = canonicalPath(root);
+  const worktreeReal = canonicalPath(worktree);
+  const cwdReal = expectedCwd ? canonicalPath(expectedCwd) : worktreeReal;
+  if (!rootReal || !worktreeReal || !cwdReal || samePath(rootReal, worktreeReal) || !samePath(cwdReal, worktreeReal)) {
+    return { ok: false, error: 'worktree の保存パスが現在の作業ツリーと一致しません。' };
+  }
+  if (!(await isRepo(rootReal)) || !(await isRepo(worktreeReal))) {
+    return { ok: false, error: '保存された repository / worktree が見つかりません。' };
+  }
+  const rootTop = canonicalPath(await repoRoot(rootReal));
+  const worktreeTop = canonicalPath(await repoRoot(worktreeReal));
+  if (!samePath(rootTop, rootReal) || !samePath(worktreeTop, worktreeReal)) {
+    return { ok: false, error: '保存された repository / worktree の root が一致しません。' };
+  }
+  if (!samePath(await commonGitDir(rootReal), await commonGitDir(worktreeReal))) {
+    return { ok: false, error: '保存された worktree は別の repository に属しています。' };
+  }
+  const liveBranch = await currentBranch(worktreeReal);
+  if (!branch || liveBranch !== branch) {
+    return { ok: false, error: 'worktree の現在 branch が保存時と一致しません。' };
+  }
+  const liveBaseBranch = await currentBranch(rootReal);
+  if (!baseBranch || liveBaseBranch !== baseBranch || liveBaseBranch === 'HEAD') {
+    return { ok: false, error: 'base checkout の現在 branch が保存時と一致しません。' };
+  }
+  const listed = GitStat.parseWorktreeList(await git(['worktree', 'list', '--porcelain'], rootReal));
+  const primary = listed.find((w) => !w.bare);
+  if (!primary || !samePath(canonicalPath(primary.path), rootReal)) {
+    return { ok: false, error: '保存された base は primary worktree ではありません。' };
+  }
+  const liveEntry = listed.find((w) => samePath(canonicalPath(w.path), worktreeReal));
+  if (!liveEntry || liveEntry.detached || liveEntry.branch !== liveBranch) {
+    return { ok: false, error: 'Git worktree registry と保存情報が一致しません。' };
+  }
+  const managedBase = canonicalPath(path.join(path.dirname(rootReal), '.agentdeck-worktrees'));
+  const relative = managedBase ? path.relative(managedBase, worktreeReal) : '..';
+  if (!managedBase || !relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+    return { ok: false, error: 'worktree は Agent Deck の管理ディレクトリ外です。' };
+  }
+  const worktreeHead = await headSha(worktreeReal);
+  const branchHead = (await git(['rev-parse', `refs/heads/${liveBranch}`], rootReal)).trim();
+  if (worktreeHead !== branchHead) {
+    return { ok: false, error: 'worktree HEAD と branch ref が一致しません。' };
+  }
+  // A worktree context without its exact launch base is not authoritative: using
+  // HEAD as a fallback would hide committed changes while still enabling merge.
+  if (!isFullCommitHash(baseSha) || !(await commitExists(rootReal, baseSha))) {
+    return { ok: false, error: '保存された diff base commit が見つかりません。' };
+  }
+  const bases = (await git(['merge-base', '--all', 'HEAD', `refs/heads/${liveBranch}`], rootReal))
+    .split('\n').map((s) => s.trim()).filter(Boolean);
+  if (bases.length !== 1 || bases[0] !== baseSha) {
+    return { ok: false, error: 'worktree の merge-base が保存時から変わっています。' };
+  }
+  return {
+    ok: true, root: rootReal, worktree: worktreeReal, branch: liveBranch,
+    baseBranch: liveBaseBranch, baseSha,
+  };
+}
+
+/** Resolve a canonical cwd to the most specific registered repository while
+ *  preserving the registry's public id/path spelling (e.g. /var vs /private/var). */
+function registeredRepoIdFor(dir) {
+  const target = canonicalPath(dir);
+  if (!target) return '';
+  let best = '', bestLen = -1;
+  for (const repo of loadRepos()) {
+    const base = canonicalPath(repo && (repo.path || repo.id));
+    if (!base) continue;
+    const t = pathKey(target), b = pathKey(base);
+    const owns = t === b || (b === '/' ? t.startsWith('/') : t.startsWith(b + '/'));
+    if (owns && b.length > bestLen) { best = repo.id; bestLen = b.length; }
+  }
+  return best;
 }
 
 // ---- repository registry (persisted under userData) ------------------------
@@ -112,7 +217,9 @@ async function gitInfoFor(dir) {
   return info;
 }
 async function enrichRepos(list) {
-  return Promise.all(list.map(async (r) => ({ ...r, ...(await gitInfoFor(r.path)) })));
+  return Promise.all(list.map(async (r) => ({
+    ...r, realPath: canonicalPath(r.path) || r.path, ...(await gitInfoFor(r.path)),
+  })));
 }
 
 // ---- window ----------------------------------------------------------------
@@ -139,6 +246,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   for (const p of ptys.values()) { try { p.kill(); } catch (_) {} }
   ptys.clear();
+  gitContexts.clear();
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -155,7 +263,7 @@ const INIT_MAX_WAIT_MS = 12_000;
 
 // ---- IPC: spawn (with optional git worktree isolation) ---------------------
 ipcMain.handle('pty:spawn', async (event, opts) => {
-  const { id, cwd, shell, cols, rows, startupCommand, initCommands, worktree } = opts || {};
+  const { id, cwd, shell, cols, rows, startupCommand, initCommands, worktree, restoreGit } = opts || {};
   const home = os.homedir();
   let effectiveCwd = cwd && cwd.trim() ? cwd : home;
   let gitMeta = null;
@@ -167,6 +275,7 @@ ipcMain.handle('pty:spawn', async (event, opts) => {
       }
       const root = await repoRoot(effectiveCwd);
       const base = await headSha(root);
+      const baseBranch = await currentBranch(root);
       const branch = sanitizeBranch(worktree.branch);
       const wtBase = path.join(path.dirname(root), '.agentdeck-worktrees');
       fs.mkdirSync(wtBase, { recursive: true });
@@ -174,10 +283,34 @@ ipcMain.handle('pty:spawn', async (event, opts) => {
       if (fs.existsSync(wtPath)) return { ok: false, error: `Worktree path already exists: ${wtPath}` };
       await git(['worktree', 'add', '-b', branch, wtPath, base], root);
       effectiveCwd = wtPath;
-      gitMeta = { cwd: wtPath, baseSha: base, branch, worktree: wtPath, root };
+      gitMeta = { cwd: wtPath, baseSha: base, branch, baseBranch, worktree: wtPath, root };
+    } else if (restoreGit && restoreGit.worktreePath) {
+      const restored = await validateWorktreeIdentity({
+        root: restoreGit.gitRoot, branch: restoreGit.branch, worktree: restoreGit.worktreePath,
+        baseBranch: restoreGit.baseBranch, baseSha: restoreGit.baseSha, expectedCwd: effectiveCwd,
+      });
+      if (restored.ok) {
+        effectiveCwd = restored.worktree;
+        gitMeta = {
+          cwd: restored.worktree, baseSha: restored.baseSha, branch: restored.branch,
+          baseBranch: restored.baseBranch, worktree: restored.worktree, root: restored.root, restored: true,
+          repoId: registeredRepoIdFor(restored.root),
+        };
+      } else {
+        // Opening the shell remains safe/useful, but stale metadata must not
+        // re-enable historical diff/merge/PR controls.
+        const base = await headSha(effectiveCwd);
+        gitMeta = {
+          cwd: effectiveCwd, baseSha: base, branch: await currentBranch(effectiveCwd),
+          worktree: null, restoreRejected: true,
+        };
+      }
     } else if (await isRepo(effectiveCwd)) {
       const base = await headSha(effectiveCwd);
-      gitMeta = { cwd: effectiveCwd, baseSha: base, branch: await currentBranch(effectiveCwd), worktree: null };
+      gitMeta = {
+        cwd: effectiveCwd, baseSha: base, branch: await currentBranch(effectiveCwd), worktree: null,
+        repoId: registeredRepoIdFor(effectiveCwd),
+      };
     }
   } catch (err) {
     return { ok: false, error: 'git: ' + String(err && err.message ? err.message : err) };
@@ -195,6 +328,7 @@ ipcMain.handle('pty:spawn', async (event, opts) => {
   }
 
   ptys.set(id, proc);
+  if (gitMeta) gitContexts.set(id, { ...gitMeta });
   const sender = event.sender;
 
   // Post-launch init: type the preset's `init` commands once the agent settles.
@@ -252,7 +386,13 @@ ipcMain.handle('pty:spawn', async (event, opts) => {
     initHardTimer = setTimeout(fireInit, INIT_MAX_WAIT_MS);
   }
 
-  return { ok: true, shell: shell || shellForHost(), cwd: effectiveCwd, git: gitMeta };
+  const repoId = (gitMeta && gitMeta.repoId) || registeredRepoIdFor((gitMeta && gitMeta.root) || effectiveCwd);
+  const registered = repoId ? loadRepos().find((repo) => repo && repo.id === repoId) : null;
+  return {
+    ok: true, shell: shell || shellForHost(), cwd: effectiveCwd,
+    canonicalCwd: canonicalPath(effectiveCwd) || effectiveCwd,
+    repoId, repoCwd: registered ? (canonicalPath(registered.path) || registered.path) : '', git: gitMeta,
+  };
 });
 
 ipcMain.on('pty:input', (_e, { id, data }) => { const p = ptys.get(id); if (p) { try { p.write(data); } catch (_) {} } });
@@ -263,17 +403,24 @@ ipcMain.on('pty:resize', (_e, { id, cols, rows }) => {
 ipcMain.on('pty:kill', (_e, { id }) => {
   const p = ptys.get(id);
   if (p) { try { p.kill(); } catch (_) {} ptys.delete(id); }
+  gitContexts.delete(id);
 });
 
 // ---- IPC: git diff review --------------------------------------------------
-ipcMain.handle('git:diff', async (_e, { cwd, baseRef }) => {
+ipcMain.handle('git:diff', async (_e, { id }) => {
   try {
-    const ref = baseRef || 'HEAD';
-    const stat = await git(['diff', '--stat', ref], cwd);
-    const diff = await git(['diff', ref], cwd);
+    const context = gitContexts.get(id);
+    if (!context || !context.cwd) return { ok: false, error: 'Git session context が見つかりません。' };
+    if (context.worktree) {
+      const identity = await validateWorktreeIdentity({ ...context, expectedCwd: context.cwd });
+      if (!identity.ok) return identity;
+    }
+    const ref = context.baseSha || 'HEAD';
+    const stat = await git(['diff', '--stat', ref], context.cwd);
+    const diff = await git(['diff', ref], context.cwd);
     let untracked = [];
     try {
-      const u = await git(['ls-files', '--others', '--exclude-standard'], cwd);
+      const u = await git(['ls-files', '--others', '--exclude-standard'], context.cwd);
       untracked = u.split('\n').map((s) => s.trim()).filter(Boolean);
     } catch (_) {}
     return { ok: true, stat, diff, untracked };
@@ -285,9 +432,15 @@ ipcMain.handle('git:diff', async (_e, { cwd, baseRef }) => {
 // Merge a worktree-isolated session's branch back into the base branch checked
 // out at the repo root (local `git merge --no-ff`; no remote/PR). Conflicts abort
 // cleanly so the base tree is left untouched.
-ipcMain.handle('git:merge', async (_e, { root, branch, worktree }) => {
+ipcMain.handle('git:merge', async (_e, { id }) => {
   try {
-    if (!root || !branch) return { ok: false, error: 'merge には worktree セッション（ブランチ）が必要です。' };
+    const context = gitContexts.get(id);
+    if (!context || !context.root || !context.branch || !context.worktree) {
+      return { ok: false, error: 'merge には検証済み worktree session が必要です。' };
+    }
+    const identity = await validateWorktreeIdentity(context);
+    if (!identity.ok) return identity;
+    const { root, branch, worktree } = identity;
     const target = await currentBranch(root);
     // `git rev-parse --abbrev-ref HEAD` prints the literal "HEAD" when detached (no error),
     // so guard on that too — git forbids a real branch named "HEAD", making this unambiguous.
@@ -317,9 +470,15 @@ ipcMain.handle('git:merge', async (_e, { root, branch, worktree }) => {
 
 // Push a worktree-isolated session's branch and open a PR against the base branch
 // via the GitHub CLI (`gh pr create`). Requires an `origin` remote + an authenticated gh.
-ipcMain.handle('git:pr', async (_e, { root, branch, worktree }) => {
+ipcMain.handle('git:pr', async (_e, { id }) => {
   try {
-    if (!root || !branch) return { ok: false, error: 'PR には worktree セッション（ブランチ）が必要です。' };
+    const context = gitContexts.get(id);
+    if (!context || !context.root || !context.branch || !context.worktree) {
+      return { ok: false, error: 'PR には検証済み worktree session が必要です。' };
+    }
+    const identity = await validateWorktreeIdentity(context);
+    if (!identity.ok) return identity;
+    const { root, branch, worktree } = identity;
     const target = await currentBranch(root);
     if (!target || target === 'HEAD') return { ok: false, error: 'ベースが detached HEAD のため PR の base を特定できません。' };
     if (target === branch) return { ok: false, error: `ベースと同じブランチ (${branch}) では PR を作成できません。` };
