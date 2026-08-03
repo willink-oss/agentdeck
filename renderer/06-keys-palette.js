@@ -49,15 +49,25 @@ window.addEventListener('keydown', (e) => {
   if (!presetOverlay.hidden) return; // agent preset manager
   if (!schedOverlay.hidden) return;  // schedule manager
   if (!diffOverlay.hidden) return;   // diff drawer
+  if (!profileMenu.hidden) return;   // anchored profile menu
   const code = chordKey(e);
+  // The launch popover is the launch form, so ⌘Enter inside it is a deliberate
+  // launch rather than the stray one this guard exists to prevent. Every other
+  // chord still belongs to the deck behind it and stays blocked.
+  if (!launchPopover.hidden && code !== 'Enter') return;
   if (code === 'KeyK') { e.preventDefault(); e.stopPropagation(); openPalette(); }
   else if (code >= 'Digit1' && code <= 'Digit9') {
     const p = visiblePanes()[Number(code.slice(5)) - 1];
     if (p) { e.preventDefault(); e.stopPropagation(); focusSession(p.dataset.id); }
   } else if (code === 'BracketRight') { e.preventDefault(); e.stopPropagation(); cyclePane(1); }
   else if (code === 'BracketLeft') { e.preventDefault(); e.stopPropagation(); cyclePane(-1); }
-  // chord+Enter deliberately works even while a form input is focused (quick launch from anywhere)
-  else if (code === 'Enter') { e.preventDefault(); e.stopPropagation(); launch(currentLaunchOpts()); }
+  // chord+Enter deliberately works even while a form input is focused (quick launch
+  // from anywhere), and closes the popover first when that is where it came from
+  else if (code === 'Enter') {
+    e.preventDefault(); e.stopPropagation();
+    closeLaunchPopover();
+    launch(currentLaunchOpts());
+  }
   else if (code === 'KeyW') {
     if (activeSessionId && sessions.has(activeSessionId)) { e.preventDefault(); e.stopPropagation(); killSession(activeSessionId); }
   } else if (code === 'KeyC') {

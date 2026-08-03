@@ -104,7 +104,16 @@ async function closeHard(app) {
       [...document.querySelectorAll('#repo-list .repo-name')].some((el) => el.textContent === 'svc-a'),
       null, { timeout: TIMEOUT });
 
+    // The launch form lives in a popover now. Opening it is idempotent, so every
+    // block that touches a form field can just ask for it; submitting closes it.
+    const openForm = async () => {
+      if (await win.evaluate(() => document.querySelector('#launch-popover').hidden)) {
+        await win.click('#new-session');
+        await win.waitForSelector('#launch-popover .lp-panel', { state: 'visible', timeout: TIMEOUT });
+      }
+    };
     const launchShell = async (name, cwd) => {
+      await openForm();
       await win.selectOption('#preset', 'shell');
       await win.fill('#name', name);
       await win.fill('#cwd', cwd);
@@ -137,6 +146,7 @@ async function closeHard(app) {
     ok(await activeName() === 'alpha', '⌘[ cycles back');
     await win.keyboard.press(`${MOD}+BracketRight`);
     ok(await activeName() === 'beta', '⌘] cycles forward');
+    await openForm();
     await win.fill('#name', 'gamma');
     await win.keyboard.press(`${MOD}+Enter`);
     // the pane is appended synchronously but markActive lands after the spawn resolves
@@ -147,6 +157,7 @@ async function closeHard(app) {
     await win.keyboard.press(`${MOD}+KeyW`);
     await win.waitForFunction(() => document.querySelectorAll('.pane').length === 2, null, { timeout: TIMEOUT });
     ok(true, '⌘W kills the active pane');
+    await openForm();
     await win.fill('#name', '');
 
     // -- ⌘W on a RISKY session (isolated worktree) confirms first; dismiss cancels --
@@ -205,9 +216,11 @@ async function closeHard(app) {
     ok(true, '⌘W on a worktree session: confirm accepted kills it');
     // reset the form so later steps are unaffected. Clear #wt-branch FIRST: unchecking
     // #wt-enable disables it, and fill() on a disabled input hangs until timeout.
+    await openForm();
     await win.fill('#wt-branch', '');
     await win.uncheck('#wt-enable');
     await win.fill('#name', '');
+    await win.click('#lp-close'); // its backdrop would otherwise swallow the next sidebar click
 
     // -- modals swallow app chords: ⌘Enter/⌘K behind the schedule manager must not reach the deck --
     await win.click('#sched-manage');
@@ -418,21 +431,25 @@ async function closeHard(app) {
     });
     await win.waitForFunction(() => sessions.size === 2, null, { timeout: TIMEOUT });
 
-    // -- narrow/200% reflow: sidebars stack and every surface remains reachable --
+    // -- narrow/200% reflow: the sidebar stacks and every surface stays reachable --
+    // Two stacked rows since the launch form became a popover (it used to be a
+    // third column, and a third row here).
     await setWindowMetrics(900, 600, 1);
     const narrowState = await win.evaluate(() => {
-      const reposRect = document.querySelector('#repos').getBoundingClientRect();
       const sidebarRect = document.querySelector('#sidebar').getBoundingClientRect();
       const stageRect = document.querySelector('#stage').getBoundingClientRect();
       return {
         media: matchMedia('(max-width: 960px)').matches,
         noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
-        stacked: reposRect.top < sidebarRect.top && sidebarRect.top < stageRect.top,
+        stacked: sidebarRect.top < stageRect.top,
+        chipsVisible: document.querySelectorAll('#agent-chips .chip').length > 0,
       };
     });
-    ok(narrowState.media && narrowState.noHorizontalOverflow && narrowState.stacked,
-      '900x600 reflows repositories, launch form, and stage without horizontal clipping');
+    ok(narrowState.media && narrowState.noHorizontalOverflow && narrowState.stacked && narrowState.chipsVisible,
+      '900x600 stacks the sidebar over the stage without horizontal clipping');
     await setWindowMetrics(1440, 920, 2);
+    // the popover is fixed-position; open it so its reachability is measured too
+    await openForm();
     const zoomState = await win.evaluate(() => {
       const reachable = (selector) => {
         const el = document.querySelector(selector);
@@ -442,16 +459,18 @@ async function closeHard(app) {
       };
       const launchReachable = reachable('#launch');
       const stageReachable = reachable('#stage');
+      const newSessionReachable = reachable('#new-session');
       return {
         media: matchMedia('(max-width: 960px)').matches,
         noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
-        launchReachable, stageReachable,
+        launchReachable, stageReachable, newSessionReachable,
         terminalsSized: [...sessions.values()].every((s) => s.term.rows > 0 && s.term.cols > 0),
       };
     });
     ok(zoomState.media && zoomState.noHorizontalOverflow && zoomState.launchReachable &&
-      zoomState.stageReachable && zoomState.terminalsSized,
+      zoomState.newSessionReachable && zoomState.stageReachable && zoomState.terminalsSized,
     '200% zoom reflows without clipping and keeps launch/stage/terminals reachable');
+    await win.click('#lp-close');
     await setWindowMetrics(1440, 920, 1);
     await win.evaluate(() => window.scrollTo(0, 0));
 
@@ -479,6 +498,7 @@ async function closeHard(app) {
 
     // Keep one real worktree session across the restart. Deck v2 must restore it
     // as a child of svc-a and retain the original diff/merge metadata.
+    await openForm();
     await win.selectOption('#preset', 'shell');
     await win.fill('#name', 'wtpersist');
     await win.fill('#cwd', repo);

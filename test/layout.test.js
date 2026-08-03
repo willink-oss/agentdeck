@@ -25,7 +25,9 @@ test('gridTemplateFor: fixed column counts', () => {
 });
 
 test('gridTemplateFor: fit uses denser responsive columns', () => {
-  assert.equal(gridTemplateFor('fit'), 'repeat(auto-fit, minmax(320px, 1fr))');
+  assert.equal(gridTemplateFor('fit'), 'repeat(auto-fit, minmax(420px, 1fr))');
+  // fit must stay denser than auto, or the mode has no reason to exist
+  assert.ok(gridTemplateFor('fit') !== gridTemplateFor('auto'));
 });
 
 test('gridTemplateFor: auto + unknown fall back to responsive auto-fit', () => {

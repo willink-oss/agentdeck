@@ -16,12 +16,27 @@
 </head>
 <body>
   <div id="app">
-    <aside id="repos">
+    <aside id="sidebar">
+      <div class="side-top">
+        <div class="brand">
+          <span class="brand-mark">&#x259A;</span>
+          <h1>AGENT&middot;DECK</h1>
+          <button type="button" id="preset-manage" class="icon-btn" data-i18n-title="form.managePresets" title="プリセットを管理">&#9881;</button>
+          <button type="button" id="sched-manage" class="icon-btn" data-i18n-title="form.manageSched" title="スケジュール起動を管理">&#9200;</button>
+        </div>
+        <button type="button" id="new-session" class="new-session" data-i18n="launch.newSession">＋ 新しいセッション</button>
+        <button type="button" id="sidebar-search" class="side-search">
+          <span class="ss-mark" aria-hidden="true">&#8981;</span>
+          <span data-i18n="launch.search">セッションを検索</span>
+          <kbd id="search-kbd"></kbd>
+        </button>
+      </div>
+
       <div class="repos-head">
         <span class="repos-title" data-i18n="repos.title">Repositories</span>
         <div class="repos-actions">
-          <button type="button" id="repo-refresh" data-i18n-title="repos.refresh" title="Refresh git status">&#x21bb;</button>
-          <button type="button" id="repo-add" data-i18n-title="repos.add" title="Add repository (folder)">+</button>
+          <button type="button" id="repo-refresh" class="icon-btn" data-i18n-title="repos.refresh" title="Refresh git status">&#x21bb;</button>
+          <button type="button" id="repo-add" class="icon-btn" data-i18n-title="repos.add" title="Add repository (folder)">+</button>
         </div>
       </div>
       <div id="repo-msg" class="repo-msg" role="status" aria-live="polite" hidden></div>
@@ -30,30 +45,82 @@
         <p data-i18n="repos.empty">リポジトリ未登録</p>
         <p class="repo-empty-sub" data-i18n="repos.emptySub">＋ でローカルフォルダを追加</p>
       </div>
-    </aside>
 
-    <aside id="sidebar">
-      <div class="brand">
-        <span class="brand-mark">&#x259A;</span>
-        <div class="brand-text">
-          <h1>AGENT&middot;DECK</h1>
-          <p data-i18n="app.tagline">parallel agent terminals</p>
-        </div>
+      <div class="legend">
+        <span><i class="dot live"></i><span data-i18n="legend.live">live</span></span>
+        <span><i class="dot waiting"></i><span data-i18n="legend.attention">attention</span></span>
+        <span><i class="dot"></i><span data-i18n="legend.exited">exited</span></span>
       </div>
 
+      <div class="sidebar-foot">
+        <select id="lang-switch" class="lang-switch" data-i18n-title="lang.label" title="Language">
+          <option value="ja">日本語</option>
+          <option value="en">English</option>
+          <option value="zhHans">简体中文</option>
+          <option value="zhHant">繁體中文</option>
+          <option value="ko">한국어</option>
+        </select>
+        <div id="sys-info">&mdash;</div>
+        <div id="count">0 sessions</div>
+      </div>
+    </aside>
+
+    <main id="stage">
+      <div id="stage-toolbar" class="stage-toolbar">
+        <div id="agent-chips" class="agent-chips" role="group" data-i18n-aria-label="quick.label"></div>
+        <div class="toolbar-spacer"></div>
+        <div id="stage-filter" class="stage-filter" hidden>
+          <span id="stage-filter-label"></span>
+          <button type="button" id="stage-all" class="sf-all" data-i18n="stage.showAll">すべて表示</button>
+        </div>
+        <div id="layout-switch" class="layout-switch" role="group"
+             data-i18n-title="layout.title" data-i18n-aria-label="layout.title" title="グリッドの列数">
+          <button type="button" class="ls-btn active" data-cols="auto" aria-pressed="true">auto</button>
+          <button type="button" class="ls-btn" data-cols="fit" aria-pressed="false" data-i18n="layout.fit">全体</button>
+          <button type="button" class="ls-btn" data-cols="1" aria-pressed="false">1</button>
+          <button type="button" class="ls-btn" data-cols="2" aria-pressed="false">2</button>
+          <button type="button" class="ls-btn" data-cols="3" aria-pressed="false">3</button>
+        </div>
+      </div>
+      <div id="empty" class="empty">
+        <div class="empty-inner">
+          <span class="empty-mark">&#x259A;&#x259A;&#x259A;</span>
+          <h2 id="empty-title" data-i18n="empty.title">No agents running</h2>
+          <p id="empty-desc" data-i18n="empty.desc">左のパネルからエージェントを起動すると、ここにターミナルが並びます。複数立ち上げれば並列で監視できます。</p>
+          <button type="button" id="restore-deck" class="restore-deck" hidden
+                  aria-label="前回のデッキを復元" data-i18n-aria-label="deck.restoreLabel"></button>
+        </div>
+      </div>
+      <div id="grid"></div>
+    </main>
+  </div>
+
+  <!-- Launch popover. The form lives here rather than in the sidebar: the full
+       set of controls is needed a few times a day, while the chip bar covers
+       the common case, so keeping it permanently on screen only costs density.
+       Every field keeps its original id — the form is moved, not rewritten. -->
+  <div id="launch-popover" class="launch-popover" hidden>
+    <div class="lp-backdrop" id="lp-backdrop"></div>
+    <div class="lp-panel" role="dialog" aria-modal="true" data-i18n-aria-label="launch.title">
+      <div class="lp-head">
+        <span class="lp-title" data-i18n="launch.title">セッションを起動</span>
+        <button type="button" id="lp-close" class="ghost-btn" data-i18n="common.close">close</button>
+      </div>
       <form id="launch-form" autocomplete="off">
         <label class="field">
-          <span class="field-label"><span data-i18n="form.agent">Agent</span>
-            <button type="button" id="preset-manage" class="preset-manage" data-i18n-title="form.managePresets" title="プリセットを管理">&#9881;</button>
-            <button type="button" id="sched-manage" class="preset-manage" data-i18n-title="form.manageSched" title="スケジュール起動を管理">&#9200;</button>
-          </span>
+          <span class="field-label" data-i18n="form.agent">Agent</span>
           <select id="preset"></select>
+        </label>
+
+        <label class="field">
+          <span class="field-label" data-i18n="profile.label">プロファイル</span>
+          <select id="profile"></select>
         </label>
 
         <label class="field">
           <span class="field-label" data-i18n="form.startup">Startup command</span>
           <input id="command" type="text" spellcheck="false" placeholder="claude" />
-          <span class="field-hint" data-i18n="form.startupHint">セッション起動時に自動実行されます</span>
+          <span class="field-hint" id="danger-hint" data-i18n="profile.dangerHint" hidden>確認なしでファイル編集とコマンド実行を許可します</span>
         </label>
 
         <label class="field">
@@ -82,58 +149,11 @@
         <button type="submit" id="launch">&#9654; Launch agent</button>
         <div class="kbd-hint" id="kbd-hint"></div>
       </form>
-
-      <div class="quick">
-        <span class="quick-label" data-i18n="quick.label">Quick launch</span>
-        <div class="quick-chips" id="quick-chips"></div>
-      </div>
-
-      <div class="legend">
-        <span><i class="dot live"></i><span data-i18n="legend.live">live</span></span>
-        <span><i class="dot waiting"></i><span data-i18n="legend.attention">attention</span></span>
-        <span><i class="dot"></i><span data-i18n="legend.exited">exited</span></span>
-      </div>
-
-      <div class="sidebar-foot">
-        <select id="lang-switch" class="lang-switch" data-i18n-title="lang.label" title="Language">
-          <option value="ja">日本語</option>
-          <option value="en">English</option>
-          <option value="zhHans">简体中文</option>
-          <option value="zhHant">繁體中文</option>
-          <option value="ko">한국어</option>
-        </select>
-        <div id="sys-info">&mdash;</div>
-        <div id="count">0 sessions</div>
-      </div>
-    </aside>
-
-    <main id="stage">
-      <div id="stage-toolbar" class="stage-toolbar">
-        <div id="stage-filter" class="stage-filter" hidden>
-          <span id="stage-filter-label"></span>
-          <button type="button" id="stage-all" class="sf-all" data-i18n="stage.showAll">すべて表示</button>
-        </div>
-        <div id="layout-switch" class="layout-switch" role="group"
-             data-i18n-title="layout.title" data-i18n-aria-label="layout.title" title="グリッドの列数">
-          <button type="button" class="ls-btn active" data-cols="auto" aria-pressed="true">auto</button>
-          <button type="button" class="ls-btn" data-cols="fit" aria-pressed="false" data-i18n="layout.fit">全体</button>
-          <button type="button" class="ls-btn" data-cols="1" aria-pressed="false">1</button>
-          <button type="button" class="ls-btn" data-cols="2" aria-pressed="false">2</button>
-          <button type="button" class="ls-btn" data-cols="3" aria-pressed="false">3</button>
-        </div>
-      </div>
-      <div id="empty" class="empty">
-        <div class="empty-inner">
-          <span class="empty-mark">&#x259A;&#x259A;&#x259A;</span>
-          <h2 id="empty-title" data-i18n="empty.title">No agents running</h2>
-          <p id="empty-desc" data-i18n="empty.desc">左のパネルからエージェントを起動すると、ここにターミナルが並びます。複数立ち上げれば並列で監視できます。</p>
-          <button type="button" id="restore-deck" class="restore-deck" hidden
-                  aria-label="前回のデッキを復元" data-i18n-aria-label="deck.restoreLabel"></button>
-        </div>
-      </div>
-      <div id="grid"></div>
-    </main>
+    </div>
   </div>
+
+  <!-- Profile menu, opened from a chip's caret. Anchored, not modal. -->
+  <div id="profile-menu" class="profile-menu" hidden role="menu"></div>
 
   <div id="diff-overlay" class="diff-overlay" hidden>
     <div class="diff-backdrop" id="diff-backdrop"></div>

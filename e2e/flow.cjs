@@ -78,6 +78,9 @@ async function closeHard(app) {
     ok(true, 'repo registered and listed in the sidebar');
 
     // 2) launch a worktree-isolated plain-shell session in it
+    // the launch form is a popover now — open it before touching its fields
+    await win.click('#new-session');
+    await win.waitForSelector('#launch-popover .lp-panel', { state: 'visible', timeout: TIMEOUT });
     await win.selectOption('#preset', 'shell');
     await win.fill('#cwd', repo);
     await win.check('#wt-enable');

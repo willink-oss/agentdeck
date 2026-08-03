@@ -120,7 +120,12 @@ const FitAddonCtor = (window.FitAddon && window.FitAddon.FitAddon) || window.Fit
 
 const $ = (s) => document.querySelector(s);
 const presetSel = $('#preset');
+const profileSel = $('#profile');
 const commandInput = $('#command');
+const dangerHint = $('#danger-hint');
+const launchPopover = $('#launch-popover');
+const profileMenu = $('#profile-menu');
+const agentChipsEl = $('#agent-chips');
 const nameInput = $('#name');
 const cwdInput = $('#cwd');
 const wtEnable = $('#wt-enable');
@@ -207,6 +212,8 @@ function applyI18n(root) {
 function setKbdHint() {
   const el = $('#kbd-hint');
   if (el) el.textContent = t(IS_MAC ? 'hint.kbdMac' : 'hint.kbdOther');
+  const kbd = $('#search-kbd');
+  if (kbd) kbd.textContent = IS_MAC ? '⌘K' : 'Ctrl+Shift+K';
 }
 function setDayChipLabels() {
   const labels = I18n.weekdayLabels(); // index by getDay (0=Sun)
@@ -229,6 +236,10 @@ function setLanguage(lang) {
   renderRepos();           // sidebar + empty state
   updateWaitingTitle();    // document.title
   renderSchedList();       // schedule modal list (if populated)
+  // chips and the profile <select> carry translated labels built in JS, so they
+  // have to be rebuilt here — applyI18n() only refills data-i18n markup
+  if (typeof buildAgentChips === 'function') buildAgentChips();
+  if (typeof setProfile === 'function') setProfile(currentProfileId);
   if (typeof renderPresetList === 'function') renderPresetList();
   if (typeof refreshPresetFormChrome === 'function') refreshPresetFormChrome(); // re-apply edit-mode title/button text
 }

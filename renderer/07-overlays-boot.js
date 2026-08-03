@@ -271,7 +271,7 @@ window.deck.onConfirmClose(({ sessions: n } = {}) => {
 // ---- boot ------------------------------------------------------------------
 (async function boot() {
   buildPresetOptions();
-  buildQuickChips();
+  buildAgentChips();
   try {
     const info = await window.deck.appInfo();
     homeDir = info.home;

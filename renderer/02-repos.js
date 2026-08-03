@@ -76,6 +76,8 @@ async function refreshReposGit() {
 function updateLaunchLabel() {
   const r = activeRepoId ? findEff(activeRepoId) : null;
   launchBtn.textContent = r ? t('repo.launchFor', { repo: r.name }) : t('repo.launch');
+  // the chips launch into the same place, so their tooltips move with it
+  if (typeof refreshChipTitles === 'function') refreshChipTitles();
 }
 function updateActiveHighlight() {
   for (const el of repoListEl.querySelectorAll('.repo-item[data-repo-id]')) {
