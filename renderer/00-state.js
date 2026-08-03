@@ -32,9 +32,48 @@ function savePresetInit() {
   try { localStorage.setItem(Presets.KEY_INIT, JSON.stringify(presetInit)); } catch (_) {}
 }
 
+/**
+ * Read a resolved color out of the PULSE stylesheet.
+ *
+ * xterm paints to a canvas, so it needs a literal color rather than a CSS
+ * variable. Reading the variable back at startup is what keeps the terminal's
+ * frame in step with the rest of the chrome without Agent Deck restating a hue
+ * the design system already owns.
+ *
+ * Custom properties compute with `var()` already substituted, so this returns a
+ * literal. If that ever stops being true the value would be a string xterm
+ * silently ignores, leaving the terminal on its own defaults — so say so.
+ */
+function pulseColor(name) {
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  if (!/^(#|rgb|hsl|color\()/.test(value)) {
+    console.warn(`[agentdeck] ${name} did not resolve to a color: "${value}"`);
+  }
+  return value;
+}
+
+/**
+ * The terminal's own theme.
+ *
+ * Chrome (background / foreground / cursor / selection) follows PULSE. The
+ * ANSI 16 deliberately do NOT: they are a terminal contract, not app styling —
+ * a program emitting ANSI 1 means "error" and ANSI 2 means "success", and users
+ * read them against decades of muscle memory. A design system governs the frame
+ * around the terminal, not the meaning of the bytes inside it.
+ */
 const TERM_THEME = {
-  background: '#0c0d10', foreground: '#e6e8ee', cursor: '#f0883e',
-  cursorAccent: '#0c0d10', selectionBackground: '#33384a',
+  background: pulseColor('--pulse-color-bg'),
+  foreground: pulseColor('--pulse-color-fg'),
+  // The brand role is a fill meant to carry white text; xterm paints the cursor
+  // as a block and draws the character under it in cursorAccent, so the pair has
+  // to read the other way round — brand-600 against the terminal background is
+  // 3.5:1 and the glyph inside it is barely there. The on-dark brand step is
+  // 7.5:1, which also keeps the cursor distinct from ANSI blue output.
+  cursor: pulseColor('--pulse-color-brand-active'),
+  cursorAccent: pulseColor('--pulse-color-bg'),
+  selectionBackground: pulseColor('--pulse-color-neutral-700'),
   black: '#1b1e25', red: '#e06c75', green: '#98c379', yellow: '#e5c07b',
   blue: '#61afef', magenta: '#c678dd', cyan: '#56b6c2', white: '#abb2bf',
   brightBlack: '#5b616d', brightRed: '#e06c75', brightGreen: '#98c379',

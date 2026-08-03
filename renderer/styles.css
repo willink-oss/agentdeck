@@ -1,21 +1,85 @@
+/* Agent Deck's palette is PULSE — i-Willink's design system — and nothing in
+   this file states a hue of its own.
+ *
+ * The variables below keep their original names so the ~700 rules underneath
+ * did not have to be rewritten; each is now an alias for a PULSE role from
+ * @willink-labs/pulse (linked in index.html, dark build). Change a color in the
+ * design system's token contract and it arrives here, in the Flutter apps, and
+ * on the web from one regenerate.
+ *
+ * Where PULSE has no role for something Agent Deck needs, that is called out
+ * inline rather than quietly reintroducing a hand-picked value.
+ */
 :root {
-  --bg: #0c0d10;
-  --bg-panel: #15171c;
-  --bg-panel-2: #1b1e25;
-  --bg-elev: #21252e;
-  --line: #2a2e38;
-  --line-soft: #20242c;
-  --text: #e6e8ee;
-  --text-dim: #8b919e;
-  --text-faint: #5b616d;
-  --accent: #f0883e;
-  --accent-soft: #ffb454;
-  --live: #6fcf6f;
-  --danger: #e06c75;
+  /* Surfaces, darkest to lightest. PULSE names three; a terminal deck needs a
+     fourth for raised controls, so that one reaches for the neutral primitive
+     one step up — which the DS explicitly allows when it has no role. */
+  --bg: var(--pulse-color-bg);
+  --bg-panel: var(--pulse-color-surface-subtle);
+  --bg-panel-2: var(--pulse-color-surface-muted);
+  --bg-elev: var(--pulse-color-neutral-700);
+
+  /* Hairlines. Translucent rather than a fixed neutral step, so one value reads
+     against all four surfaces above — a flat step would vanish on whichever
+     surface it happened to match. */
+  --line: color-mix(in srgb, var(--pulse-color-fg) 14%, transparent);
+  --line-soft: color-mix(in srgb, var(--pulse-color-fg) 7%, transparent);
+
+  --text: var(--pulse-color-fg);
+  --text-dim: var(--pulse-color-muted);
+  --text-faint: var(--pulse-color-fg-subtle);
+
+  /* The brand splits in two here, and the split is not cosmetic.
+   *
+   * PULSE's brand role is a FILL: --pulse-color-brand-fg is white, which is the
+   * DS saying "put white on this, do not write with it". The old orange was
+   * light enough (L .303) to serve as both a fill and a foreground, so one
+   * variable covered both jobs. The brand blue is dark (L .130) and cannot:
+   * writing with it on a raised control gives 1.78:1 — the label disappears.
+   *
+   * So --accent stays the fill (paired with --accent-fg), and text/hairlines
+   * that need to read AS the brand use --accent-text, which is the DS's own
+   * on-dark brand role. Anything a user has to READ or a focus ring they have
+   * to SEE belongs on --accent-text / --accent-line, never on --accent. */
+  --accent: var(--pulse-color-brand);
+  --accent-soft: var(--pulse-color-brand-hover);
+  --accent-fg: var(--pulse-color-brand-fg);
+  /* Brand as foreground on any of the four surfaces (5.5:1 on the lightest). */
+  --accent-text: var(--pulse-color-brand-soft-fg);
+  /* Brand as a border / focus ring. One step darker than --accent-text so a
+     ring still reads as a ring rather than as text, while clearing the 3:1
+     WCAG 1.4.11 floor for non-text contrast on every surface. */
+  --accent-line: var(--pulse-color-brand-active);
+
+  --live: var(--pulse-color-success);
+  --danger: var(--pulse-color-danger);
+  /* "This session is waiting for you" — the app's single most important signal.
+     It rode on the old orange accent, which worked only because the brand was
+     itself orange. With a blue brand that shortcut turns an alarm into just
+     another accent, and makes an attention pane indistinguishable from the
+     focused one. It gets the DS's own warning role instead, so the alarm hue
+     and the brand hue can never collapse into each other again. */
+  --attention: var(--pulse-color-warning);
+  /* Informational, and deliberately NOT --accent: the diff viewer marks hunks
+     and PR links in a hue that must stay distinct from the brand, which is now
+     itself blue. */
+  --info: var(--pulse-color-accent-cyan);
+  /* The two remaining hues the diff viewer's syntax highlighting needs. PULSE
+     has no "syntax" vocabulary — it would be inventing roles nothing else
+     paints — so these borrow the nearest accents it does carry. */
+  --syntax-kw: var(--pulse-color-accent-pink);
+  /* Deliberately NOT the warning role, even though amber is the obvious hue:
+     --attention already holds it, and a decorative syntax colour must not be
+     able to drag the alarm colour with it when the DS retunes warning. Takes
+     the primitive one step down instead, which also separates the two by
+     lightness where they do share a screen. */
+  --syntax-num: var(--pulse-color-amber-600);
+
   /* Latin mono first, then system CJK fallbacks so zh-Hans / zh-Hant / ja / ko
-     UI text renders reliably (the xterm terminal sets its own font separately). */
+     UI text renders reliably (the xterm terminal sets its own font separately).
+     PULSE sets type sizes, not faces, so the family stays Agent Deck's own. */
   --mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", ui-monospace, "Hiragino Sans", "PingFang SC", "PingFang TC", "Microsoft YaHei", "Noto Sans CJK SC", "Malgun Gothic", monospace;
-  --radius: 8px;
+  --radius: var(--pulse-radius-control);
 }
 
 * { box-sizing: border-box; }
@@ -64,11 +128,11 @@ html, body {
   line-height: 1;
 }
 #repo-add { font-size: 16px; }
-#repo-add:hover, #repo-refresh:hover { color: var(--accent); border-color: var(--accent); }
+#repo-add:hover, #repo-refresh:hover { color: var(--accent-text); border-color: var(--accent-line); }
 
 .repo-msg {
   font-size: 10.5px; line-height: 1.4; color: var(--danger);
-  background: rgba(224,108,117,0.1); border: 1px solid rgba(224,108,117,0.35);
+  background: color-mix(in srgb, var(--danger) 10%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
   border-radius: 5px; padding: 6px 8px; word-break: break-word;
 }
 .repo-list { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex: 1; min-height: 0; }
@@ -84,16 +148,16 @@ html, body {
   transition: background 0.12s, border-color 0.12s;
 }
 .repo-item.is-home { border-bottom: 1px solid var(--line-soft); border-radius: 6px 6px 0 0; margin-bottom: 2px; }
-.repo-home-icon { color: var(--accent-soft); flex: none; font-size: 13px; line-height: 1; }
+.repo-home-icon { color: var(--accent-text); flex: none; font-size: 13px; line-height: 1; }
 .repo-item:hover { background: var(--bg-panel-2); }
-.repo-item.active { background: var(--bg-panel-2); border-color: rgba(240,136,62,0.45); }
+.repo-item.active { background: var(--bg-panel-2); border-color: var(--accent-line); }
 
 .repo-row { display: flex; align-items: center; gap: 7px; }
 .repo-name {
   font-size: 12px; font-weight: 600; color: var(--text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
 }
-.repo-item.active .repo-name { color: var(--accent-soft); }
+.repo-item.active .repo-name { color: var(--accent-text); }
 .repo-branch {
   font-size: 9px; color: var(--text-dim);
   border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
@@ -103,10 +167,10 @@ html, body {
 .repo-stat .stat-add { color: var(--live); }
 .repo-stat .stat-del { color: var(--danger); }
 .repo-count {
-  font-size: 9px; font-weight: 700; color: #14110c; background: var(--accent);
+  font-size: 9px; font-weight: 700; color: var(--accent-fg); background: var(--accent);
   border-radius: 999px; padding: 1px 6px; flex: none;
 }
-.repo-count.attention { background: var(--accent-soft); box-shadow: 0 0 8px rgba(255,180,84,0.7); }
+.repo-count.attention { background: var(--attention); color: var(--pulse-color-neutral-950); box-shadow: 0 0 8px color-mix(in srgb, var(--attention) 70%, transparent); }
 .repo-remove {
   flex: none; background: transparent; border: none; color: var(--text-faint);
   cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; opacity: 0; transition: opacity 0.12s, color 0.12s;
@@ -118,7 +182,7 @@ html, body {
   cursor: pointer; font-size: 11px; line-height: 1; padding: 0 2px; opacity: 0; transition: opacity 0.12s, color 0.12s;
 }
 .repo-item:hover .repo-sched { opacity: 1; }
-.repo-sched:hover { color: var(--accent); }
+.repo-sched:hover { color: var(--accent-text); }
 
 .repo-path {
   font-size: 9.5px; color: var(--text-faint);
@@ -131,7 +195,7 @@ html, body {
   padding: 3px 6px 3px 4px; border-radius: 5px;
   font-size: 10.5px; color: var(--text-dim);
 }
-.repo-worktree .wt-icon { color: var(--accent-soft); flex: none; font-size: 10px; }
+.repo-worktree .wt-icon { color: var(--accent-text); flex: none; font-size: 10px; }
 .repo-worktree .wt-branch {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
 }
@@ -147,12 +211,12 @@ html, body {
 .repo-session .status-dot { width: 7px; height: 7px; }
 .repo-session-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .repo-session.exited { opacity: 0.5; }
-.repo-session.attention .repo-session-name { color: var(--accent-soft); }
+.repo-session.attention .repo-session-name { color: var(--attention); }
 
 /* ---------- Sidebar ---------- */
 #sidebar {
   background:
-    linear-gradient(180deg, rgba(240,136,62,0.05), transparent 220px),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 220px),
     var(--bg-panel);
   border-right: 1px solid var(--line);
   display: flex;
@@ -167,9 +231,9 @@ html, body {
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand-mark {
   font-size: 22px;
-  color: var(--accent);
+  color: var(--accent-text);
   line-height: 1;
-  text-shadow: 0 0 18px rgba(240,136,62,0.5);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 50%, transparent);
 }
 .brand-text h1 {
   margin: 0;
@@ -211,8 +275,11 @@ input, select, textarea {
 }
 input::placeholder, textarea::placeholder { color: var(--text-faint); }
 input:focus, select:focus, textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(240,136,62,0.18);
+  /* The solid border is what satisfies WCAG 1.4.11 (5.4:1 against the field's
+     surface); the halo only widens it. At the old 18% the halo composited to
+     1.16:1 — invisible — so it was decoration pretending to be an indicator. */
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-line) 40%, transparent);
 }
 select { appearance: none; cursor: pointer; }
 
@@ -227,12 +294,12 @@ select { appearance: none; cursor: pointer; }
   cursor: pointer;
   font-size: 16px;
 }
-#browse:hover { color: var(--text); border-color: var(--accent); }
+#browse:hover { color: var(--text); border-color: var(--accent-line); }
 
 #launch {
   margin-top: 2px;
   background: var(--accent);
-  color: #14110c;
+  color: var(--accent-fg);
   border: none;
   border-radius: 6px;
   font-family: var(--mono);
@@ -262,7 +329,7 @@ select { appearance: none; cursor: pointer; }
   padding: 5px 11px;
   transition: all 0.12s;
 }
-.chip:hover { color: var(--text); border-color: var(--accent-soft); background: var(--bg-elev); }
+.chip:hover { color: var(--text); border-color: var(--accent-line); background: var(--bg-elev); }
 
 .sidebar-foot {
   margin-top: auto;
@@ -296,7 +363,7 @@ select { appearance: none; cursor: pointer; }
   color: var(--text-dim); cursor: pointer; font-family: var(--mono); font-size: 10.5px;
   padding: 3px 10px; transition: all 0.12s;
 }
-.sf-all:hover { color: var(--text); border-color: var(--accent); }
+.sf-all:hover { color: var(--text); border-color: var(--accent-line); }
 
 /* grid layout (column-count) switcher — right side of the stage toolbar */
 .layout-switch {
@@ -310,7 +377,7 @@ select { appearance: none; cursor: pointer; }
   font-size: 10.5px; line-height: 1; padding: 4px 8px; transition: all 0.12s;
 }
 .ls-btn:hover { color: var(--text); }
-.ls-btn.active { background: var(--bg-panel-2); color: var(--accent-soft); }
+.ls-btn.active { background: var(--bg-panel-2); color: var(--accent-text); }
 
 .empty {
   position: absolute; inset: 0;
@@ -323,28 +390,36 @@ select { appearance: none; cursor: pointer; }
 .empty p { margin: 0; color: var(--text-faint); font-size: 12px; line-height: 1.7; }
 .restore-deck {
   margin-top: 22px; padding: 8px 18px; border-radius: 7px;
-  background: var(--bg-elev); border: 1px solid var(--accent); color: var(--accent-soft);
+  background: var(--bg-elev); border: 1px solid var(--accent-line); color: var(--accent-text);
   cursor: pointer; font-family: var(--mono); font-size: 12px; transition: all 0.12s;
 }
-.restore-deck:hover { background: rgba(240,136,62,0.12); }
+.restore-deck:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .restore-deck[hidden] { display: none; }
 
-/* update-available toast (bottom-right) */
+/* update-available toast (bottom-right).
+   This is the only surface that speaks to the user unprompted, so it takes the
+   informational role rather than the brand: in brand blue it looked like the
+   same passive decoration as an active repo row or a pane badge, and "there is
+   a new version" stopped being distinguishable from ordinary chrome. The button
+   inside it is still an action, so that keeps the brand fill. */
 .update-toast {
   position: fixed; bottom: 16px; right: 16px; z-index: 100;
   display: flex; align-items: center; gap: 10px; max-width: 380px;
-  background: var(--bg-elev); border: 1px solid var(--accent); border-radius: 10px;
+  background: var(--bg-elev); border: 1px solid var(--info); border-radius: 10px;
   padding: 10px 12px 10px 14px; font-size: 12px; color: var(--text);
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 .update-toast[hidden] { display: none; }
-.ut-mark { color: var(--accent-soft); font-weight: 700; flex: none; }
+.ut-mark { color: var(--info); font-weight: 700; flex: none; }
 #update-toast-text { flex: 1; min-width: 0; }
 .ut-btn {
-  flex: none; background: var(--accent); border: none; border-radius: 6px; color: #14110c;
+  flex: none; background: var(--accent); border: none; border-radius: 6px; color: var(--accent-fg);
   cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 5px 12px;
 }
-.ut-btn:hover { background: var(--accent-soft); }
+/* --accent-fg (white) is the DS's answer for --accent, not for --accent-soft.
+   Lightening the fill on hover without re-deriving the label drops it to 3.9:1,
+   and this button restarts the app when pressed — it has to stay readable. */
+.ut-btn:hover { background: var(--accent-soft); color: var(--pulse-color-neutral-950); }
 .ut-dismiss {
   flex: none; background: transparent; border: none; color: var(--text-dim);
   cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px;
@@ -432,21 +507,21 @@ select { appearance: none; cursor: pointer; }
 }
 .status-dot.live {
   background: var(--live);
-  box-shadow: 0 0 8px rgba(111,207,111,0.7);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--live) 70%, transparent);
   animation: pulse 2.4s ease-in-out infinite;
 }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
 
 .pane-name { font-size: 12px; font-weight: 600; color: var(--text); }
 .pane-name[contenteditable="true"] {
-  outline: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; cursor: text;
+  outline: 1px solid var(--accent-line); border-radius: 3px; padding: 0 4px; cursor: text;
 }
 .pane-badge {
   font-size: 9px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--accent-soft);
-  border: 1px solid rgba(255,180,84,0.3);
+  color: var(--accent-text);
+  border: 1px solid color-mix(in srgb, var(--accent-soft) 30%, transparent);
   border-radius: 4px;
   padding: 2px 6px;
 }
@@ -506,18 +581,21 @@ select { appearance: none; cursor: pointer; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .legend .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); }
 .legend .dot.live { background: var(--live); }
-.legend .dot.waiting { background: var(--accent-soft); }
+.legend .dot.waiting { background: var(--attention); }
 
 /* ---------- attention / waiting states ---------- */
 .status-dot.waiting {
-  background: var(--accent-soft);
-  box-shadow: 0 0 9px rgba(255,180,84,0.8);
+  background: var(--attention);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--attention) 80%, transparent);
   animation: pulse 1.2s ease-in-out infinite;
 }
-.pane.attention { box-shadow: inset 0 0 0 1px var(--accent); }
-.pane.active { box-shadow: inset 0 0 0 2px var(--accent); } /* keyboard/click focus */
+/* Attention and focus must not be the same colour: one is the app telling you
+   something, the other is you telling the app something. Focus keeps the brand,
+   waiting takes the warning hue. */
+.pane.attention { box-shadow: inset 0 0 0 1px var(--attention); }
+.pane.active { box-shadow: inset 0 0 0 2px var(--accent-line); } /* keyboard/click focus */
 .pane.attention .pane-head {
-  background: linear-gradient(90deg, rgba(240,136,62,0.16), var(--bg-panel-2));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--attention) 16%, transparent), var(--bg-panel-2));
 }
 
 /* ---------- pane diff button ---------- */
@@ -533,7 +611,7 @@ select { appearance: none; cursor: pointer; }
   padding: 3px 8px;
   transition: all 0.12s;
 }
-.pane-diff:hover { color: var(--accent-soft); border-color: var(--accent-soft); }
+.pane-diff:hover { color: var(--accent-text); border-color: var(--accent-line); }
 .pane-diff:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ---------- diff overlay ---------- */
@@ -558,7 +636,7 @@ select { appearance: none; cursor: pointer; }
 .palette-list { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
 .palette-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; min-width: 0; }
 .palette-row.sel { background: var(--bg-panel-2); }
-.palette-row.sel .palette-name { color: var(--accent-soft); }
+.palette-row.sel .palette-name { color: var(--accent-text); }
 .palette-name { font-size: 13px; color: var(--text); flex: none; }
 .palette-ctx { font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .palette-empty { padding: 14px 12px; font-size: 12px; color: var(--text-faint); text-align: center; }
@@ -569,7 +647,7 @@ select { appearance: none; cursor: pointer; }
   background: none; border: none; padding: 0 2px; margin-left: 4px;
   color: var(--text-faint); cursor: pointer; font-size: 12px; line-height: 1;
 }
-.preset-manage:hover { color: var(--accent); }
+.preset-manage:hover { color: var(--accent-text); }
 .preset-overlay { position: fixed; inset: 0; z-index: 61; } /* above the ⌘K palette (60) */
 .preset-overlay[hidden] { display: none; }
 .preset-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
@@ -595,12 +673,12 @@ select { appearance: none; cursor: pointer; }
 }
 .preset-row-tag { font-size: 10px; color: var(--text-faint); letter-spacing: 0.08em; }
 .preset-row-init {
-  flex-basis: 100%; font-size: 11px; color: var(--accent); opacity: 0.85;
+  flex-basis: 100%; font-size: 11px; color: var(--accent-text); opacity: 0.85;
   font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #preset-form { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 #preset-form input { flex: 1; min-width: 140px; }
-.preset-form-title { width: 100%; font-size: 12px; font-weight: 600; color: var(--accent); }
+.preset-form-title { width: 100%; font-size: 12px; font-weight: 600; color: var(--accent-text); }
 .preset-init-input {
   flex-basis: 100%; min-width: 100%; resize: vertical; font-family: var(--mono);
   font-size: 12px; line-height: 1.4;
@@ -608,11 +686,11 @@ select { appearance: none; cursor: pointer; }
 .preset-init-hint { flex-basis: 100%; }
 .preset-form-actions { display: flex; align-items: center; gap: 8px; width: 100%; }
 #preset-submit {
-  background: var(--bg-elev); border: 1px solid rgba(240,136,62,0.45); border-radius: 5px;
-  color: var(--accent); cursor: pointer; font-family: var(--mono);
+  background: var(--bg-elev); border: 1px solid var(--accent-line); border-radius: 5px;
+  color: var(--accent-text); cursor: pointer; font-family: var(--mono);
   font-size: 11px; padding: 5px 11px; transition: all 0.12s;
 }
-#preset-submit:hover { border-color: var(--accent); }
+#preset-submit:hover { border-color: var(--accent-line); }
 
 /* ---------- scheduled launches (⏰): reuses the preset modal shell ---------- */
 #sched-form {
@@ -629,18 +707,18 @@ select { appearance: none; cursor: pointer; }
   color: var(--text-faint); cursor: pointer; font-family: var(--mono);
   font-size: 11px; padding: 4px 9px; transition: all 0.12s;
 }
-.day-chip.on { color: var(--accent); border-color: rgba(240,136,62,0.55); background: rgba(240,136,62,0.10); }
+.day-chip.on { color: var(--accent-text); border-color: var(--accent-line); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .sched-row input[type="checkbox"] { flex: none; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .sched-row.off .preset-row-name, .sched-row.off .sched-row-when { color: var(--text-faint); }
 .sched-row-when { font-size: 11px; color: var(--text-dim); flex: none; }
-.sched-warn { color: var(--accent-soft); }
+.sched-warn { color: var(--attention); } /* schedule points at a repo that is no longer registered */
 .sched-empty { padding: 14px 12px; font-size: 12px; color: var(--text-faint); text-align: center; list-style: none; }
 #sched-submit {
-  background: var(--bg-elev); border: 1px solid rgba(240,136,62,0.45); border-radius: 5px;
-  color: var(--accent); cursor: pointer; font-family: var(--mono);
+  background: var(--bg-elev); border: 1px solid var(--accent-line); border-radius: 5px;
+  color: var(--accent-text); cursor: pointer; font-family: var(--mono);
   font-size: 11px; padding: 5px 11px; transition: all 0.12s;
 }
-#sched-submit:hover { border-color: var(--accent); }
+#sched-submit:hover { border-color: var(--accent-line); }
 
 /* in-terminal search bar (chord+F) */
 .term-search {
@@ -695,13 +773,13 @@ select { appearance: none; cursor: pointer; }
   color: var(--text-dim); cursor: pointer; font-family: var(--mono);
   font-size: 11px; padding: 5px 11px; transition: all 0.12s;
 }
-.ghost-btn:hover { color: var(--text); border-color: var(--accent); }
-#diff-merge { color: var(--accent); border-color: rgba(240,136,62,0.45); }
-#diff-merge:hover:not(:disabled) { background: rgba(240,136,62,0.12); border-color: var(--accent); color: var(--accent-soft); }
+.ghost-btn:hover { color: var(--text); border-color: var(--accent-line); }
+#diff-merge { color: var(--accent-text); border-color: var(--accent-line); }
+#diff-merge:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: var(--accent-line); color: var(--accent-text); }
 #diff-merge:disabled { opacity: 0.5; cursor: default; }
 #diff-merge[hidden] { display: none; }
-#diff-pr { color: #61afef; border-color: rgba(97,175,239,0.4); }
-#diff-pr:hover:not(:disabled) { background: rgba(97,175,239,0.12); border-color: #61afef; }
+#diff-pr { color: var(--info); border-color: color-mix(in srgb, var(--info) 40%, transparent); }
+#diff-pr:hover:not(:disabled) { background: color-mix(in srgb, var(--info) 12%, transparent); border-color: var(--info); }
 #diff-pr:disabled { opacity: 0.5; cursor: default; }
 #diff-pr[hidden] { display: none; }
 
@@ -716,17 +794,17 @@ select { appearance: none; cursor: pointer; }
   white-space: pre; tab-size: 2;
 }
 .dl { display: block; }
-.dl-file { color: var(--accent-soft); font-weight: 600; }
-.dl-hunk { color: #61afef; }
-.dl-add  { color: #98c379; background: rgba(152,195,121,0.07); }
-.dl-del  { color: #e06c75; background: rgba(224,108,117,0.07); }
+.dl-file { color: var(--accent-text); font-weight: 600; }
+.dl-hunk { color: var(--info); }
+.dl-add  { color: var(--live); background: color-mix(in srgb, var(--live) 7%, transparent); }
+.dl-del  { color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, transparent); }
 /* word-level: emphasise the actually-changed tokens within a +/- line */
-.dl-add .dl-word { background: rgba(152,195,121,0.30); border-radius: 2px; }
-.dl-del .dl-word { background: rgba(224,108,117,0.30); border-radius: 2px; }
+.dl-add .dl-word { background: color-mix(in srgb, var(--live) 30%, transparent); border-radius: 2px; }
+.dl-del .dl-word { background: color-mix(in srgb, var(--danger) 30%, transparent); border-radius: 2px; }
 /* syntax tokens (text colour — composes with the dl-word background) */
-.dl .sx-kw  { color: #c678dd; }
-.dl .sx-str { color: #98c379; }
-.dl .sx-num { color: #e5c07b; }
+.dl .sx-kw  { color: var(--syntax-kw); }
+.dl .sx-str { color: var(--live); }
+.dl .sx-num { color: var(--syntax-num); }
 .dl .sx-com { color: var(--text-dim); font-style: italic; }
 /* add/del lines keep their tint via background; let syntax own the text colour */
 
@@ -743,8 +821,8 @@ select { appearance: none; cursor: pointer; }
   color: var(--text-dim); cursor: pointer; font-family: var(--mono);
   font-size: 10px; padding: 3px 10px; flex: none; transition: all 0.12s;
 }
-.df-item:hover { color: var(--text); border-color: var(--accent-soft); }
-.df-item.active { color: var(--accent); border-color: rgba(240,136,62,0.45); }
+.df-item:hover { color: var(--text); border-color: var(--accent-line); }
+.df-item.active { color: var(--accent-text); border-color: var(--accent-line); }
 
 /* language switcher (sidebar footer) */
 .lang-switch {

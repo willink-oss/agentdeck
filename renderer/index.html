@@ -7,6 +7,11 @@
         content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
   <title>Agent Deck</title>
   <link rel="stylesheet" href="../node_modules/xterm/css/xterm.css" />
+  <!-- PULSE, i-Willink's design system, as CSS custom properties. The dark-only
+       build: Agent Deck has exactly one appearance, so the full sheet would ship
+       a light theme it can never show. Must load BEFORE styles.css, which
+       defines its own variables in terms of these. -->
+  <link rel="stylesheet" href="../node_modules/@willink-labs/pulse/dist/pulse.dark.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
