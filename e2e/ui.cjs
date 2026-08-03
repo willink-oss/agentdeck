@@ -27,6 +27,16 @@ const MOD = process.platform === 'darwin' ? 'Meta' : 'Control+Shift';
 setTimeout(() => { console.error('UI FAIL: global 5min deadline exceeded'); process.exit(1); }, 300000).unref();
 const ok = (cond, msg) => { if (!cond) throw new Error('UI FAIL: ' + msg); console.log('  ✓ ' + msg); };
 const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
+const realPathKey = (value) => {
+  try {
+    const key = fs.realpathSync(String(value || '')).replace(/\\/g, '/').replace(/\/+$/, '');
+    return process.platform === 'win32' ? key.toLowerCase() : key;
+  } catch (_) { return ''; }
+};
+const sameRealPath = (left, right) => {
+  const a = realPathKey(left), b = realPathKey(right);
+  return !!a && !!b && a === b;
+};
 
 /** Close the app but never let teardown decide the test's fate: a graceful close
  *  gets 15s, then the Electron child is SIGKILLed (the macOS CI runner has shown
@@ -158,11 +168,20 @@ async function closeHard(app) {
       const snapshot = JSON.parse(localStorage.getItem(Workspace.KEY));
       return { snapshot, session: snapshot.sessions.find((s) => s.name === 'wtkill') };
     });
-    ok(savedWt.snapshot.version === 2 && savedWt.session.repoId === repo &&
-      savedWt.session.launchCwd === repo && fs.realpathSync(savedWt.session.gitRoot) === fs.realpathSync(repo) &&
+    const savedWtValid = savedWt.snapshot.version === 2 &&
+      sameRealPath(savedWt.session.repoId, repo) && sameRealPath(savedWt.session.launchCwd, repo) &&
+      sameRealPath(savedWt.session.gitRoot, repo) &&
       savedWt.session.baseSha && savedWt.session.branch === 'agentdeck/e2e-killconfirm' &&
-      savedWt.session.baseBranch === 'main' && savedWt.session.worktreePath,
-    'worktree launch saves v2 parent-repo/base/branch metadata');
+      savedWt.session.baseBranch === 'main' && savedWt.session.worktreePath;
+    if (!savedWtValid) {
+      throw new Error(`UI FAIL: invalid saved worktree metadata: ${JSON.stringify({
+        repo, repoKey: realPathKey(repo), session: savedWt.session,
+        repoIdKey: realPathKey(savedWt.session.repoId),
+        launchCwdKey: realPathKey(savedWt.session.launchCwd),
+        gitRootKey: realPathKey(savedWt.session.gitRoot),
+      })}`);
+    }
+    ok(true, 'worktree launch saves v2 parent-repo/base/branch metadata');
     const paneCount = () => win.evaluate(() => document.querySelectorAll('.pane').length);
     const withWt = await paneCount();
     dialogAction = 'dismiss';
@@ -283,15 +302,43 @@ async function closeHard(app) {
     ok(true, '「すべて表示」 clears the filter');
 
     const setWindowMetrics = async (width, height, zoom) => {
-      await app.evaluate(({ BrowserWindow }, metrics) => {
+      const applied = await app.evaluate(({ BrowserWindow, screen }, metrics) => {
         const bw = BrowserWindow.getAllWindows()[0];
-        bw.setContentSize(metrics.width, metrics.height);
-        bw.webContents.setZoomFactor(metrics.zoom);
+        const display = screen.getDisplayMatching(bw.getBounds());
+        const [outerWidth, outerHeight] = bw.getSize();
+        const [currentContentWidth, currentContentHeight] = bw.getContentSize();
+        const frameWidth = Math.max(0, outerWidth - currentContentWidth);
+        const frameHeight = Math.max(0, outerHeight - currentContentHeight);
+        // Hosted macOS runners expose a smaller desktop than 1440x920. Preserve
+        // the requested CSS viewport by scaling both the physical content size
+        // and Chromium zoom together; width*scale / (zoom*scale) is unchanged.
+        const maxContentWidth = Math.max(1, display.workArea.width - frameWidth - 16);
+        const maxContentHeight = Math.max(1, display.workArea.height - frameHeight - 16);
+        const scale = Math.min(1, maxContentWidth / metrics.width, maxContentHeight / metrics.height);
+        const contentWidth = Math.max(1, Math.floor(metrics.width * scale));
+        const contentHeight = Math.max(1, Math.floor(metrics.height * scale));
+        bw.setContentSize(contentWidth, contentHeight);
+        bw.webContents.setZoomFactor(metrics.zoom * scale);
+        return {
+          scale, contentWidth, contentHeight,
+          workArea: display.workArea,
+          zoomFactor: metrics.zoom * scale,
+        };
       }, { width, height, zoom });
-      await win.waitForFunction((expected) =>
-        Math.abs(window.innerWidth - expected.width / expected.zoom) < 30 &&
-        Math.abs(window.innerHeight - expected.height / expected.zoom) < 30,
-      { width, height, zoom }, { timeout: TIMEOUT });
+      try {
+        await win.waitForFunction((expected) =>
+          Math.abs(window.innerWidth - expected.width / expected.zoom) < 30 &&
+          Math.abs(window.innerHeight - expected.height / expected.zoom) < 30,
+        { width, height, zoom }, { timeout: TIMEOUT });
+      } catch (err) {
+        const actual = await win.evaluate(() => ({
+          width: window.innerWidth, height: window.innerHeight,
+          devicePixelRatio: window.devicePixelRatio,
+        }));
+        throw new Error(`UI FAIL: window metrics did not settle: ${JSON.stringify({
+          requested: { width, height, zoom }, applied, actual,
+        })}`);
+      }
     };
 
     // -- fit layout: eight real PTYs stay inside the stage at 1440x920 ----------
