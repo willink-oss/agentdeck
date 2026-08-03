@@ -26,6 +26,21 @@ applyLayout((() => { try { return localStorage.getItem(LAYOUT_KEY); } catch (_) 
 
 // ---- pane drag-to-reorder (HTML5 DnD; drag a pane header onto another) ------
 let dragPaneId = null;
+
+// Chromium's default drop behaviour is to navigate to the dropped file — which
+// unloads the deck and takes every live terminal with it. Dropping a folder on
+// the window while reaching for "add repository" is an easy way to hit that, so
+// anything that is not our own pane drag gets swallowed here. Registered in the
+// capture phase so it also covers targets whose own handlers bail out early.
+// (main.js denies will-navigate too; this stops the page from ever getting there.)
+for (const type of ['dragover', 'drop']) {
+  document.addEventListener(type, (e) => {
+    if (dragPaneId != null) return; // internal reorder — the #grid handlers own it
+    e.preventDefault();
+    if (type === 'dragover') { try { e.dataTransfer.dropEffect = 'none'; } catch (_) {} }
+  }, true);
+}
+
 grid.addEventListener('dragover', (e) => {
   if (dragPaneId == null) return;
   e.preventDefault();

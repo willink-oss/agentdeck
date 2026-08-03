@@ -495,6 +495,22 @@ async function closeHard(app) {
     git(persistWorktree, 'commit', '-m', 'persisted worktree change');
     const persistHead = git(persistWorktree, 'rev-parse', 'HEAD');
 
+    // -- close guard: live sessions must not vanish on a stray window close ---------
+    // Closing the window kills every PTY, which on macOS collides with "closing the
+    // window keeps the app running". Declining the prompt has to leave the deck intact.
+    const closeWindow = () => app.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows()[0];
+      if (w) w.close();
+    });
+    dialogAction = 'dismiss';
+    await closeWindow();
+    await win.waitForTimeout(400);
+    ok(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length) === 1,
+      'declining the close prompt keeps the window (and its sessions) alive');
+    ok(await win.evaluate(() => document.querySelectorAll('.pane').length) > 0,
+      'declining the close prompt leaves the panes untouched');
+    dialogAction = 'accept';
+
     // -- real restart: layout + presets persist; the saved deck restores -------------
     // a full close + relaunch (same user-data-dir), not win.reload(): reload keeps the
     // main process alive, orphaning the live PTYs (a state real usage can't produce —

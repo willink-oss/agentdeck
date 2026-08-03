@@ -13,6 +13,8 @@ const Repos = require('./lib/repos');
 const GitStat = require('./lib/gitstat');
 const Version = require('./lib/version');
 const Schedule = require('./lib/schedule');
+const { createValidateWorktreeIdentity } = require('./lib/worktree-identity');
+const { createSessionMerge } = require('./lib/session-merge');
 const { autoUpdater } = require('electron-updater');
 
 const pexec = promisify(execFile);
@@ -71,67 +73,13 @@ async function commitExists(dir, sha) {
 
 /** Re-establish the identity of a saved worktree using live Git state. This is
  *  also called immediately before merge/PR, so stale or renderer-forged metadata
- *  can never select a different repository or branch for a destructive action. */
-async function validateWorktreeIdentity({ root, branch, baseBranch, worktree, baseSha, expectedCwd } = {}) {
-  const rootReal = canonicalPath(root);
-  const worktreeReal = canonicalPath(worktree);
-  const cwdReal = expectedCwd ? canonicalPath(expectedCwd) : worktreeReal;
-  if (!rootReal || !worktreeReal || !cwdReal || samePath(rootReal, worktreeReal) || !samePath(cwdReal, worktreeReal)) {
-    return { ok: false, error: 'worktree の保存パスが現在の作業ツリーと一致しません。' };
-  }
-  if (!(await isRepo(rootReal)) || !(await isRepo(worktreeReal))) {
-    return { ok: false, error: '保存された repository / worktree が見つかりません。' };
-  }
-  const rootTop = canonicalPath(await repoRoot(rootReal));
-  const worktreeTop = canonicalPath(await repoRoot(worktreeReal));
-  if (!samePath(rootTop, rootReal) || !samePath(worktreeTop, worktreeReal)) {
-    return { ok: false, error: '保存された repository / worktree の root が一致しません。' };
-  }
-  if (!samePath(await commonGitDir(rootReal), await commonGitDir(worktreeReal))) {
-    return { ok: false, error: '保存された worktree は別の repository に属しています。' };
-  }
-  const liveBranch = await currentBranch(worktreeReal);
-  if (!branch || liveBranch !== branch) {
-    return { ok: false, error: 'worktree の現在 branch が保存時と一致しません。' };
-  }
-  const liveBaseBranch = await currentBranch(rootReal);
-  if (!baseBranch || liveBaseBranch !== baseBranch || liveBaseBranch === 'HEAD') {
-    return { ok: false, error: 'base checkout の現在 branch が保存時と一致しません。' };
-  }
-  const listed = GitStat.parseWorktreeList(await git(['worktree', 'list', '--porcelain'], rootReal));
-  const primary = listed.find((w) => !w.bare);
-  if (!primary || !samePath(canonicalPath(primary.path), rootReal)) {
-    return { ok: false, error: '保存された base は primary worktree ではありません。' };
-  }
-  const liveEntry = listed.find((w) => samePath(canonicalPath(w.path), worktreeReal));
-  if (!liveEntry || liveEntry.detached || liveEntry.branch !== liveBranch) {
-    return { ok: false, error: 'Git worktree registry と保存情報が一致しません。' };
-  }
-  const managedBase = canonicalPath(path.join(path.dirname(rootReal), '.agentdeck-worktrees'));
-  const relative = managedBase ? path.relative(managedBase, worktreeReal) : '..';
-  if (!managedBase || !relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
-    return { ok: false, error: 'worktree は Agent Deck の管理ディレクトリ外です。' };
-  }
-  const worktreeHead = await headSha(worktreeReal);
-  const branchHead = (await git(['rev-parse', `refs/heads/${liveBranch}`], rootReal)).trim();
-  if (worktreeHead !== branchHead) {
-    return { ok: false, error: 'worktree HEAD と branch ref が一致しません。' };
-  }
-  // A worktree context without its exact launch base is not authoritative: using
-  // HEAD as a fallback would hide committed changes while still enabling merge.
-  if (!isFullCommitHash(baseSha) || !(await commitExists(rootReal, baseSha))) {
-    return { ok: false, error: '保存された diff base commit が見つかりません。' };
-  }
-  const bases = (await git(['merge-base', '--all', 'HEAD', `refs/heads/${liveBranch}`], rootReal))
-    .split('\n').map((s) => s.trim()).filter(Boolean);
-  if (bases.length !== 1 || bases[0] !== baseSha) {
-    return { ok: false, error: 'worktree の merge-base が保存時から変わっています。' };
-  }
-  return {
-    ok: true, root: rootReal, worktree: worktreeReal, branch: liveBranch,
-    baseBranch: liveBaseBranch, baseSha,
-  };
-}
+ *  can never select a different repository or branch for a destructive action.
+ *  The twelve rejection paths live in lib/worktree-identity.js so they can be
+ *  unit-tested against injected Git state; the I/O helpers stay here. */
+const validateWorktreeIdentity = createValidateWorktreeIdentity({
+  canonicalPath, samePath, isRepo, repoRoot, currentBranch, commonGitDir,
+  headSha, git, parseWorktreeList: GitStat.parseWorktreeList, commitExists, isFullCommitHash,
+});
 
 /** Resolve a canonical cwd to the most specific registered repository while
  *  preserving the registry's public id/path spelling (e.g. /var vs /private/var). */
@@ -192,6 +140,9 @@ function saveSchedules(list) {
 const GIT_INFO_TTL = 4000;
 const gitInfoCache = new Map(); // path -> { at, info }
 async function safeGit(args, cwd) { try { return await git(args, cwd); } catch (_) { return ''; } }
+
+/** Merge / PR preconditions + conflict-safe merge (lib/session-merge.js). */
+const sessionMerge = createSessionMerge({ git, safeGit, currentBranch });
 async function worktreeStat(dir) {
   return GitStat.parseNumstat(await safeGit(['diff', '--numstat', 'HEAD'], dir));
 }
@@ -238,9 +189,75 @@ function createWindow() {
       contextIsolation: true, nodeIntegration: false, sandbox: false,
     },
   });
+  // The deck is a single local page for its whole lifetime. Anything that would
+  // replace it — a dropped file/folder (Chromium navigates to file:// by default),
+  // a stray link, window.open — would tear down every live terminal with it, so
+  // navigation is denied outright. External URLs go through update:open, which
+  // validates them before handing them to the OS browser.
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (e, url) => {
+    if (url !== win.webContents.getURL()) e.preventDefault();
+  });
+  win.webContents.on('will-frame-navigate', (e) => {
+    if (!e.isMainFrame) e.preventDefault();
+  });
+  attachCloseGuard(win);
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   return win;
 }
+
+// ---- close guard -----------------------------------------------------------
+// Closing the window kills every PTY (see window-all-closed). On macOS that
+// collides with the "closing the window keeps the app alive" convention, so a
+// user who closes the deck out of habit silently loses every running agent.
+// Ask first — but only when there is something to lose. The prompt is a
+// renderer-side confirm() rather than a native dialog so it is translated by
+// lib/i18n.js and stays scriptable from e2e like every other confirmation.
+const CLOSE_CONFIRM_TIMEOUT_MS = 5000;
+/** win.id -> { timer } while a confirmation is outstanding. */
+const pendingClose = new Map();
+/** win.id of windows the user has already agreed to close. */
+const closeApproved = new Set();
+/** Quitting (Cmd+Q, app.quit()) is an explicit "end everything" — only the
+ *  window-close path carries the macOS ambiguity this guard exists for, and
+ *  preventing a close mid-quit would abort the quit sequence. */
+let appQuitting = false;
+app.on('before-quit', () => { appQuitting = true; });
+
+function attachCloseGuard(win) {
+  win.on('close', (e) => {
+    if (appQuitting || closeApproved.has(win.id) || ptys.size === 0) return;
+    e.preventDefault();
+    if (pendingClose.has(win.id)) return; // already asking
+    // A wedged renderer must not make the window unclosable: fall through to a
+    // normal close if the answer does not come back in time.
+    const timer = setTimeout(() => resolveClose(win, true), CLOSE_CONFIRM_TIMEOUT_MS);
+    pendingClose.set(win.id, { timer });
+    try { win.webContents.send('app:confirm-close', { sessions: ptys.size }); }
+    catch (_) { resolveClose(win, true); }
+  });
+  win.on('closed', () => {
+    const p = pendingClose.get(win.id);
+    if (p) clearTimeout(p.timer);
+    pendingClose.delete(win.id);
+    closeApproved.delete(win.id);
+  });
+}
+
+function resolveClose(win, proceed) {
+  const pending = pendingClose.get(win.id);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pendingClose.delete(win.id);
+  if (!proceed || win.isDestroyed()) return;
+  closeApproved.add(win.id);
+  win.close();
+}
+
+ipcMain.on('app:close-decision', (e, { proceed } = {}) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (win) resolveClose(win, !!proceed);
+});
 
 app.whenReady().then(() => {
   createWindow();
@@ -447,28 +464,11 @@ ipcMain.handle('git:merge', async (_e, { id }) => {
     const identity = await validateWorktreeIdentity(context);
     if (!identity.ok) return identity;
     const { root, branch, worktree } = identity;
-    const target = await currentBranch(root);
-    // `git rev-parse --abbrev-ref HEAD` prints the literal "HEAD" when detached (no error),
-    // so guard on that too — git forbids a real branch named "HEAD", making this unambiguous.
-    if (!target || target === 'HEAD') return { ok: false, error: 'ベースが detached HEAD のため merge 先ブランチを特定できません。' };
-    if (target === branch) return { ok: false, error: `ベースと同じブランチ (${branch}) には merge できません。` };
-    // Only committed history merges; tell apart "no commits yet" from "uncommitted work left in the session".
-    const ahead = parseInt((await git(['rev-list', '--count', `${target}..${branch}`], root)).trim(), 10) || 0;
-    if (ahead === 0) {
-      const dirty = worktree ? (await safeGit(['status', '--porcelain'], worktree)).trim() : '';
-      return dirty
-        ? { ok: false, error: 'worktree に未コミットの変更があります。セッション内で commit してから merge してください。' }
-        : { ok: false, error: '取り込む新しいコミットがありません。' };
-    }
-    let out;
-    try {
-      out = await git(['merge', '--no-ff', '-m', `Merge agentdeck session: ${branch}`, branch], root);
-    } catch (err) {
-      try { await git(['merge', '--abort'], root); } catch (_) {} // best-effort: leave base clean
-      const msg = (err && (err.stderr || err.message)) || String(err);
-      return { ok: false, error: 'merge 失敗（中断しました）: ' + String(msg).trim() };
-    }
-    return { ok: true, target, branch, ahead, summary: (out || '').trim() };
+    const pre = await sessionMerge.preconditions({ root, branch, worktree, mode: 'merge' });
+    if (!pre.ok) return pre;
+    const merged = await sessionMerge.mergeBranch({ root, branch });
+    if (!merged.ok) return merged;
+    return { ok: true, target: pre.target, branch, ahead: pre.ahead, summary: merged.summary };
   } catch (err) {
     return { ok: false, error: String(err && err.message ? err.message : err) };
   }
@@ -485,19 +485,9 @@ ipcMain.handle('git:pr', async (_e, { id }) => {
     const identity = await validateWorktreeIdentity(context);
     if (!identity.ok) return identity;
     const { root, branch, worktree } = identity;
-    const target = await currentBranch(root);
-    if (!target || target === 'HEAD') return { ok: false, error: 'ベースが detached HEAD のため PR の base を特定できません。' };
-    if (target === branch) return { ok: false, error: `ベースと同じブランチ (${branch}) では PR を作成できません。` };
-    if (!(await safeGit(['remote', 'get-url', 'origin'], root)).trim()) {
-      return { ok: false, error: 'リモート（origin）が設定されていません。' };
-    }
-    const ahead = parseInt((await git(['rev-list', '--count', `${target}..${branch}`], root)).trim(), 10) || 0;
-    if (ahead === 0) {
-      const dirty = worktree ? (await safeGit(['status', '--porcelain'], worktree)).trim() : '';
-      return dirty
-        ? { ok: false, error: 'worktree に未コミットの変更があります。commit してから PR を作成してください。' }
-        : { ok: false, error: '取り込む新しいコミットがありません。' };
-    }
+    const pre = await sessionMerge.preconditions({ root, branch, worktree, mode: 'pr' });
+    if (!pre.ok) return pre;
+    const { target, ahead } = pre;
     try {
       // push from root: worktrees share one object store, so the session branch ref resolves here
       await git(['push', '-u', 'origin', branch], root);

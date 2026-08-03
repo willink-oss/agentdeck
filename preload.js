@@ -36,4 +36,6 @@ contextBridge.exposeInMainWorld('deck', {
   schedulesToggle: (id, enabled) => ipcRenderer.invoke('schedules:toggle', { id, enabled }),
   onScheduleFire: (cb) => ipcRenderer.on('schedule:fire', (_e, p) => cb(p)),
   scheduleReady: () => ipcRenderer.send('schedule:ready'),
+  onConfirmClose: (cb) => ipcRenderer.on('app:confirm-close', (_e, p) => cb(p)),
+  closeDecision: (proceed) => ipcRenderer.send('app:close-decision', { proceed }),
 });

@@ -257,6 +257,17 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !termMenu.hidden) { e.preventDefault(); e.stopPropagation(); closeTermMenu(); }
 }, true);
 
+// ---- close guard -----------------------------------------------------------
+// main asks before letting a window close while sessions are live (closing kills
+// every PTY). Answering here keeps the prompt translated and testable, and the
+// reply is sent in a finally so a throwing confirm() can never wedge the window
+// shut — main also has its own timeout as a second line of defence.
+window.deck.onConfirmClose(({ sessions: n } = {}) => {
+  let proceed = true;
+  try { proceed = confirm(t('app.confirmClose', { n: n == null ? sessions.size : n })); }
+  finally { window.deck.closeDecision(proceed); }
+});
+
 // ---- boot ------------------------------------------------------------------
 (async function boot() {
   buildPresetOptions();
