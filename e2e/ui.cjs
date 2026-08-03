@@ -29,13 +29,22 @@ const ok = (cond, msg) => { if (!cond) throw new Error('UI FAIL: ' + msg); conso
 const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
 const realPathKey = (value) => {
   try {
-    const key = fs.realpathSync(String(value || '')).replace(/\\/g, '/').replace(/\/+$/, '');
+    const resolveRealPath = fs.realpathSync.native || fs.realpathSync;
+    const key = resolveRealPath(String(value || '')).replace(/\\/g, '/').replace(/\/+$/, '');
     return process.platform === 'win32' ? key.toLowerCase() : key;
+  } catch (_) { return ''; }
+};
+const fileIdentityKey = (value) => {
+  try {
+    const stat = fs.statSync(String(value || ''), { bigint: true });
+    return stat.ino ? `${stat.dev}:${stat.ino}` : '';
   } catch (_) { return ''; }
 };
 const sameRealPath = (left, right) => {
   const a = realPathKey(left), b = realPathKey(right);
-  return !!a && !!b && a === b;
+  if (a && b && a === b) return true;
+  const leftId = fileIdentityKey(left), rightId = fileIdentityKey(right);
+  return !!leftId && leftId === rightId;
 };
 
 /** Close the app but never let teardown decide the test's fate: a graceful close
@@ -179,6 +188,8 @@ async function closeHard(app) {
         repoIdKey: realPathKey(savedWt.session.repoId),
         launchCwdKey: realPathKey(savedWt.session.launchCwd),
         gitRootKey: realPathKey(savedWt.session.gitRoot),
+        repoIdFile: fileIdentityKey(savedWt.session.repoId),
+        gitRootFile: fileIdentityKey(savedWt.session.gitRoot),
       })}`);
     }
     ok(true, 'worktree launch saves v2 parent-repo/base/branch metadata');

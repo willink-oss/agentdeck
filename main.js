@@ -45,7 +45,13 @@ async function currentBranch(dir) {
  *  metadata originates in renderer localStorage, so paths are untrusted until
  *  they have passed this main-process canonicalisation. */
 function canonicalPath(dir) {
-  try { return Repos.normalizePath(fs.realpathSync(String(dir || ''))); }
+  try {
+    // The native resolver expands Windows 8.3 aliases (RUNNER~1) to the same
+    // final path as their long form. The JS resolver can preserve the alias,
+    // which breaks repository affinity even though both names are one directory.
+    const resolveRealPath = fs.realpathSync.native || fs.realpathSync;
+    return Repos.normalizePath(resolveRealPath(String(dir || '')));
+  }
   catch (_) { return ''; }
 }
 function pathKey(dir) {
