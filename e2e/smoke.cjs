@@ -59,9 +59,13 @@ async function closeHard(app) {
 
     // 1) Renderer shell is present and the renderer scripts ran (boot builds #preset options).
     await win.waitForSelector('#repo-list', { timeout: TIMEOUT });
+    await win.waitForFunction(() => document.querySelectorAll('#preset option').length > 0, null, { timeout: 20000 });
+    // The UI language is resolved from the OS locale at boot, so pin it before
+    // asserting on any label — otherwise this smoke only passes on an English
+    // machine and reports "sidebar did not render" on a Japanese one.
+    await win.evaluate(() => { try { setLanguage('en'); } catch (_) {} });
     const title = (await win.textContent('.repos-title')) || '';
     if (!/Repositories/i.test(title)) fail('repo sidebar did not render');
-    await win.waitForFunction(() => document.querySelectorAll('#preset option').length > 0, null, { timeout: 20000 });
 
     // 2) Preload bridge is wired under contextIsolation.
     const hasDeck = await win.evaluate(() => !!(window.deck && typeof window.deck.appInfo === 'function'));
