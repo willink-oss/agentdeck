@@ -15,6 +15,7 @@ const Version = require('./lib/version');
 const Schedule = require('./lib/schedule');
 const { createValidateWorktreeIdentity } = require('./lib/worktree-identity');
 const { createSessionMerge } = require('./lib/session-merge');
+const { createLogger } = require('./lib/logger');
 const { autoUpdater } = require('electron-updater');
 
 const pexec = promisify(execFile);
@@ -26,6 +27,23 @@ const ptys = new Map();
 const gitContexts = new Map();
 
 const shellForHost = () => defaultShell(process.platform, process.env);
+
+/* Lifecycle log under userData (never terminal contents, never transmitted).
+ * app.getPath() needs the app to be ready, so the logger is created lazily and
+ * every call site can just use log.* without ordering concerns. */
+let logger = null;
+function logFile() { return path.join(app.getPath('userData'), 'agentdeck.log'); }
+const log = new Proxy({}, {
+  get(_t, method) {
+    return (...args) => {
+      try {
+        if (!logger) logger = createLogger({ file: logFile(), fs });
+        const fn = logger[method];
+        if (typeof fn === 'function') fn(...args);
+      } catch (_) { /* logging must never be the thing that breaks */ }
+    };
+  },
+});
 
 // ---- git helpers -----------------------------------------------------------
 async function git(args, cwd) {
@@ -202,8 +220,34 @@ function createWindow() {
     if (!e.isMainFrame) e.preventDefault();
   });
   attachCloseGuard(win);
+  attachCrashReap(win);
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   return win;
+}
+
+/* If the renderer dies, every PTY it was driving keeps running with nothing
+ * attached to it: an agent that carries on spending tokens and editing the
+ * repository while nobody can see or stop it. The session ids only exist in the
+ * dead renderer, so there is no recovering the deck — reap the processes and
+ * let the reloaded window start clean. */
+function attachCrashReap(win) {
+  win.webContents.on('render-process-gone', (_e, details) => {
+    const reason = (details && details.reason) || 'unknown';
+    log.error('renderer.gone', { reason, ptys: ptys.size });
+    if (reason === 'clean-exit') return; // ordinary teardown, ptys already closed
+    reapAllPtys('renderer-gone');
+  });
+  win.webContents.on('unresponsive', () => log.warn('renderer.unresponsive', { ptys: ptys.size }));
+  win.webContents.on('responsive', () => log.info('renderer.responsive'));
+}
+
+/** Kill every tracked PTY and forget its Git context. */
+function reapAllPtys(why) {
+  if (!ptys.size) return;
+  log.warn('pty.reap', { why, count: ptys.size });
+  for (const p of ptys.values()) { try { p.kill(); } catch (err) { log.fail('pty.killFailed', err); } }
+  ptys.clear();
+  gitContexts.clear();
 }
 
 // ---- close guard -----------------------------------------------------------
@@ -604,23 +648,41 @@ ipcMain.on('schedule:ready', (e) => {
 function ensureWindow() {
   const win = BrowserWindow.getAllWindows()[0] || createWindow();
   return new Promise((resolve) => {
-    if (schedReadyContents.has(win.webContents.id)) { resolve(win); return; }
-    const timer = setTimeout(done, 10_000);
-    function onReady(e) { if (e.sender.id === win.webContents.id) done(); }
-    function done() { clearTimeout(timer); ipcMain.removeListener('schedule:ready', onReady); resolve(win); }
+    if (schedReadyContents.has(win.webContents.id)) { resolve(win, true); return; }
+    const timer = setTimeout(() => done(false), 10_000);
+    function onReady(e) { if (e.sender.id === win.webContents.id) done(true); }
+    function done(ready) {
+      clearTimeout(timer);
+      ipcMain.removeListener('schedule:ready', onReady);
+      resolve({ win, ready });
+    }
     ipcMain.on('schedule:ready', onReady);
   });
 }
 
 async function fireSchedules(due, list, now) {
   // Record firings (one-shots self-disable) and persist BEFORE launching, so a
-  // crash between the two can't replay the same firing on the next start.
+  // crash between the two can't replay the same firing on the next start. The
+  // cost of that ordering is that a firing which then fails to reach the
+  // renderer is gone for good — so say so, loudly, instead of losing a 3am run
+  // with no trace of it ever having been due.
   let next = list;
   for (const s of due) next = next.map((x) => (x.id === s.id ? Schedule.markFired(x, now) : x));
-  try { saveSchedules(next); } catch (_) {}
-  const win = await ensureWindow();
-  if (!win || win.isDestroyed()) return;
-  for (const s of due) win.webContents.send('schedule:fire', { schedule: s });
+  try { saveSchedules(next); } catch (err) { log.fail('schedule.saveFailed', err); }
+  const ids = due.map((s) => s.id);
+  const { win, ready } = await ensureWindow();
+  if (!win || win.isDestroyed()) {
+    log.error('schedule.lost', { ids, why: 'no-window' });
+    return;
+  }
+  if (!ready) {
+    // sent anyway: a renderer that booted just after the timeout still handles it
+    log.warn('schedule.rendererNotReady', { ids });
+  }
+  for (const s of due) {
+    try { win.webContents.send('schedule:fire', { schedule: s }); log.info('schedule.fired', { id: s.id }); }
+    catch (err) { log.fail('schedule.sendFailed', { id: s.id, error: String(err && err.message) }); }
+  }
 }
 
 function startScheduler() {

@@ -668,6 +668,29 @@ async function closeHard(app) {
       /agentdeck\/e2e-persist/.test(git(repo, 'log', '-1', '--pretty=%s')),
     'restart: validated worktree branch merges successfully into the base checkout');
 
+    // -- renderer crash: PTYs must not outlive the window that was driving them --
+    // Last, because it destroys the renderer. A surviving PTY is an agent that
+    // keeps spending tokens and editing the repo with nobody able to see it.
+    const logPath = path.join(userDataDir, 'agentdeck.log');
+    const livePtys = await win.evaluate(() => sessions.size);
+    ok(livePtys > 0, `crash test starts with ${livePtys} live sessions`);
+    await app.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows()[0];
+      if (w) w.webContents.forcefullyCrashRenderer();
+    }).catch(() => {});
+    // main writes the reap synchronously from the render-process-gone handler
+    const deadline = Date.now() + 15000;
+    let logged = '';
+    while (Date.now() < deadline) {
+      logged = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8') : '';
+      if (/pty\.reap/.test(logged)) break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    ok(/renderer\.gone/.test(logged), 'a renderer crash is recorded in the log');
+    const reapLine = (logged.split('\n').find((l) => l.includes('pty.reap')) || '').trim();
+    ok(new RegExp(`"count":${livePtys}\\b`).test(reapLine),
+      `every PTY is reaped when the renderer dies (${reapLine})`);
+
     console.log('UI PASS');
   } finally {
     await closeHard(app);
