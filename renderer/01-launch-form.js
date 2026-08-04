@@ -178,16 +178,24 @@ function toggleLaunchPopover() {
 
 /** Re-merge + redraw after a preset change, keeping the current selection (and
  *  typed command) when it still exists. */
-function rebuildPresetUI() {
-  PRESETS = Presets.merge(customPresets, presetInit, presetOverrides);
+function rebuildPresetUI({ formWasUntouched } = {}) {
   const prevKey = presetSel.value;
   const prevProfile = currentProfileId;
   const prevCmd = commandInput.value;
+  // Whether the command field still held what the form itself put there. Callers
+  // that have already changed the resolution (the preset manager saves the
+  // override before rebuilding) must measure this BEFORE that change and pass it
+  // in; otherwise it can be worked out here.
+  const wasUntouched = formWasUntouched !== undefined
+    ? formWasUntouched
+    : prevCmd === commandFor(prevKey, prevProfile);
+
+  PRESETS = Presets.merge(customPresets, presetInit, presetOverrides);
   buildPresetOptions(); // resets the selection to the claude default
   if (PRESETS[prevKey]) {
     presetSel.value = prevKey;
-    setProfile(prevProfile);
-    commandInput.value = prevCmd;
+    setProfile(prevProfile); // refills the command from the new resolution
+    if (!wasUntouched) commandInput.value = prevCmd;
     refreshDangerHint();
   }
   buildAgentChips();

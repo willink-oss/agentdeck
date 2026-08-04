@@ -245,7 +245,9 @@ function setLanguage(lang) {
   refreshRepoHint();
   renderRepos();           // sidebar + empty state
   updateWaitingTitle();    // document.title
-  renderSchedList();       // schedule modal list (if populated)
+  // 08-schedules.js loads after 07, and boot() populates the preset select before
+  // its first await — so setLanguage() can genuinely run before 08 has executed.
+  if (typeof renderSchedList === 'function') renderSchedList();
   // chips and the profile <select> carry translated labels built in JS, so they
   // have to be rebuilt here — applyI18n() only refills data-i18n markup
   if (typeof buildAgentChips === 'function') buildAgentChips();

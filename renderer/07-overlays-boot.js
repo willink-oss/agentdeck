@@ -73,6 +73,7 @@ const presetCmdInput = $('#preset-cmd-input');
 const presetInitInput = $('#preset-init-input');
 const presetSubmitBtn = $('#preset-submit');
 const presetCancelBtn = $('#preset-cancel');
+const presetResetBtn = $('#preset-reset');
 const presetFormMsg = $('#preset-form-msg');
 let editingPresetKey = null;
 let editingBuiltin = false; // built-ins: only their post-launch init is editable (label/cmd are read-only)
@@ -96,6 +97,7 @@ function resetPresetForm() {
   presetFormTitle.hidden = true;
   presetSubmitBtn.textContent = t('common.add');
   presetCancelBtn.hidden = true;
+  presetResetBtn.hidden = true;
   presetFormMsg.hidden = true;
 }
 function renderPresetList() {
@@ -110,12 +112,17 @@ function renderPresetList() {
     li.append(nm, cmd);
     if (Presets.isBuiltin(key)) {
       // built-ins are read-only except their post-launch init commands
-      const initBtn = document.createElement('button');
-      initBtn.type = 'button'; initBtn.className = 'ghost-btn'; initBtn.textContent = t('presets.editInit');
-      initBtn.addEventListener('click', () => startInitEdit(key));
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button'; editBtn.className = 'ghost-btn'; editBtn.textContent = t('common.edit');
+      editBtn.addEventListener('click', () => startInitEdit(key));
       const tag = document.createElement('span');
-      tag.className = 'preset-row-tag'; tag.textContent = t('presets.builtin');
-      li.append(initBtn, tag);
+      tag.className = 'preset-row-tag';
+      // an edited built-in is still a built-in, but the user should see that its
+      // command is no longer the shipped one
+      const edited = Presets.isOverridden(key, presetOverrides);
+      tag.textContent = edited ? t('profile.edited') : t('presets.builtin');
+      if (edited) tag.classList.add('is-edited');
+      li.append(editBtn, tag);
     } else {
       const edit = document.createElement('button');
       edit.type = 'button'; edit.className = 'ghost-btn'; edit.textContent = t('common.edit');
@@ -152,7 +159,9 @@ function startPresetEdit(key) {
   presetFormMsg.hidden = true;
   presetLabelInput.focus();
 }
-/** Edit only a built-in's post-launch init commands; its label/cmd stay read-only. */
+/** Edit a built-in: its launch command (stored as an override, so the shipped
+ *  default is always recoverable) and its post-launch init commands. The label
+ *  stays read-only — it is how saved decks and the chip bar name this agent. */
 function startInitEdit(key) {
   const p = PRESETS[key];
   if (!p) return;
@@ -161,14 +170,26 @@ function startInitEdit(key) {
   presetLabelInput.value = p.label;
   presetCmdInput.value = p.cmd;
   presetLabelInput.disabled = true;
-  presetCmdInput.disabled = true;
+  presetCmdInput.disabled = false;   // the command is the point of this form
   presetInitInput.value = (presetInit[key] || []).join('\n');
-  presetFormTitle.textContent = t('presets.initTitle', { label: p.label });
+  presetFormTitle.textContent = t('presets.editTitle', { label: p.label });
   presetFormTitle.hidden = false;
   presetSubmitBtn.textContent = t('common.save');
   presetCancelBtn.hidden = false;
+  presetResetBtn.hidden = !Presets.isOverridden(key, presetOverrides);
   presetFormMsg.hidden = true;
-  presetInitInput.focus();
+  presetCmdInput.focus();
+  presetCmdInput.select();
+}
+
+/** Drop a built-in's override so it goes back to what lib/presets.js ships. */
+function resetPresetOverride(key) {
+  if (!Presets.isOverridden(key, presetOverrides)) return;
+  delete presetOverrides[key];
+  savePresetOverrides();
+  rebuildPresetUI();
+  renderPresetList();
+  if (editingPresetKey === key) startInitEdit(key); // refill with the restored default
 }
 function deletePreset(key) {
   const c = customPresets.find((p) => p.key === key);
@@ -189,9 +210,20 @@ function setPresetInit(key, lines) {
 }
 presetForm.addEventListener('submit', (e) => {
   e.preventDefault();
+  // measure before the override lands, or the comparison is against itself
+  const formWasUntouched = commandInput.value === commandFor(presetSel.value, currentProfileId);
   const init = Presets.parseInit(presetInitInput.value);
   if (editingBuiltin) {
-    // built-in: only its init is editable; label/cmd are fixed in lib/presets.js
+    // built-in: the label is fixed, but the launch command is stored as an
+    // override so "reset to default" stays a deletion rather than a guess
+    const cmd = presetCmdInput.value.trim();
+    const shipped = Presets.BUILTINS[editingPresetKey];
+    if (shipped && cmd === shipped.cmd) delete presetOverrides[editingPresetKey];
+    else {
+      presetOverrides[editingPresetKey] = { ...(presetOverrides[editingPresetKey] || {}), cmd };
+    }
+    presetOverrides = Presets.normalizeOverrides(presetOverrides, customPresets.map((c) => c.key));
+    savePresetOverrides();
     setPresetInit(editingPresetKey, init);
   } else {
     const v = Presets.validate(presetLabelInput.value, presetCmdInput.value);
@@ -210,11 +242,12 @@ presetForm.addEventListener('submit', (e) => {
     }
   }
   resetPresetForm();
-  rebuildPresetUI();
+  rebuildPresetUI({ formWasUntouched });
   renderPresetList();
   presetLabelInput.focus();
 });
 presetCancelBtn.addEventListener('click', resetPresetForm);
+presetResetBtn.addEventListener('click', () => { if (editingPresetKey) resetPresetOverride(editingPresetKey); });
 function openPresetManager() {
   presetOverlay.hidden = false;
   resetPresetForm();
