@@ -342,17 +342,31 @@ async function closeHard(app) {
     `pane identifies its agent by rail + glyph + badge (${identity.tone}/${identity.glyph}/${identity.badge})`);
 
     // -- state filter: narrow the stage to what is waiting, then clear ----------
+    // Flag exactly one. The idle heuristic can have flagged others already —
+    // Windows shells print a prompt immediately, which is precisely what it looks
+    // for — so clear first rather than assume this is the only one.
     await win.evaluate(() => {
+      for (const s of sessions.values()) clearAttention(s);
       const [id, s] = [...sessions][0];
       setAttention(s, id);
       renderRepos();
     });
     await win.click('.stf-btn[data-state="attention"]');
-    const filtered = await win.evaluate(() => ({
-      visible: [...document.querySelectorAll('.pane')].filter((p) => p.style.display !== 'none').length,
-      pressed: document.querySelector('.stf-btn[data-state="attention"]').getAttribute('aria-pressed'),
-    }));
-    ok(filtered.visible === 1 && filtered.pressed === 'true', 'state filter shows only sessions needing attention');
+    // Assert the invariant, not a count: visible panes are exactly the flagged
+    // ones. A count would race the idle heuristic flagging another session.
+    const filtered = await win.evaluate(() => {
+      const visible = [...document.querySelectorAll('.pane')]
+        .filter((p) => p.style.display !== 'none').map((p) => p.dataset.id).sort();
+      const flagged = [...sessions].filter(([, s]) => s.attention).map(([id]) => id).sort();
+      return {
+        matches: visible.length > 0 && JSON.stringify(visible) === JSON.stringify(flagged),
+        visible: visible.length,
+        flagged: flagged.length,
+        pressed: document.querySelector('.stf-btn[data-state="attention"]').getAttribute('aria-pressed'),
+      };
+    });
+    ok(filtered.matches && filtered.pressed === 'true',
+      `state filter shows exactly the sessions needing attention (${filtered.visible} visible / ${filtered.flagged} flagged)`);
     await win.click('.stf-btn[data-state="attention"]'); // clicking the active filter clears it
     await win.waitForFunction(() =>
       [...document.querySelectorAll('.pane')].every((p) => p.style.display !== 'none'),
