@@ -112,3 +112,52 @@ async function restoreWorkspace() {
   if (failed) flashRepoMsg(t('deck.restorePartial', { ok: restored, failed: failed }));
 }
 restoreBtnEl.addEventListener('click', restoreWorkspace);
+
+// ---- sidebar width (dragged divider, persisted) -----------------------------
+// A fixed sidebar truncated exactly the part that identifies a repository — its
+// name — so the width is the user's to set. Bounds live in lib/sidebar.js: too
+// narrow and the rows stop being readable, too wide and the stage can no longer
+// hold the two terminal columns `fit` promises.
+const Sidebar = window.Sidebar;
+const sidebarResizeEl = $('#sidebar-resize');
+let sidebarWidth = Sidebar.DEFAULT;
+
+function applySidebarWidth(px, persist) {
+  sidebarWidth = Sidebar.clampWidth(px);
+  document.documentElement.style.setProperty('--sidebar-w', sidebarWidth + 'px');
+  sidebarResizeEl.setAttribute('aria-valuenow', String(sidebarWidth));
+  sidebarResizeEl.setAttribute('aria-valuemin', String(Sidebar.MIN));
+  sidebarResizeEl.setAttribute('aria-valuemax', String(Sidebar.MAX));
+  if (persist) { try { localStorage.setItem(Sidebar.KEY, String(sidebarWidth)); } catch (_) {} }
+}
+applySidebarWidth(
+  Sidebar.normalizeStored((() => { try { return localStorage.getItem(Sidebar.KEY); } catch (_) { return null; } })()),
+  false,
+);
+
+sidebarResizeEl.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  // keep the divider under the cursor rather than snapping its left edge there
+  const grabOffset = e.clientX - sidebarResizeEl.getBoundingClientRect().left;
+  sidebarResizeEl.setPointerCapture(e.pointerId);
+  document.body.classList.add('is-resizing');
+  const onMove = (ev) => applySidebarWidth(Sidebar.widthFromPointer(ev.clientX, grabOffset), false);
+  const onUp = () => {
+    sidebarResizeEl.removeEventListener('pointermove', onMove);
+    sidebarResizeEl.removeEventListener('pointerup', onUp);
+    sidebarResizeEl.removeEventListener('pointercancel', onUp);
+    document.body.classList.remove('is-resizing');
+    applySidebarWidth(sidebarWidth, true); // persist once, at the end of the drag
+  };
+  sidebarResizeEl.addEventListener('pointermove', onMove);
+  sidebarResizeEl.addEventListener('pointerup', onUp);
+  sidebarResizeEl.addEventListener('pointercancel', onUp);
+});
+// a divider that only a mouse can move is not a divider for everyone
+sidebarResizeEl.addEventListener('keydown', (e) => {
+  const dir = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+  if (!dir) return;
+  e.preventDefault();
+  applySidebarWidth(Sidebar.stepWidth(sidebarWidth, dir, e.shiftKey), true);
+});
+sidebarResizeEl.addEventListener('dblclick', () => applySidebarWidth(Sidebar.DEFAULT, true));

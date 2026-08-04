@@ -79,6 +79,7 @@
      UI text renders reliably (the xterm terminal sets its own font separately).
      PULSE sets type sizes, not faces, so the family stays Agent Deck's own. */
   --mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", ui-monospace, "Hiragino Sans", "PingFang SC", "PingFang TC", "Microsoft YaHei", "Noto Sans CJK SC", "Malgun Gothic", monospace;
+  --sidebar-w: 264px;
   --radius: var(--pulse-radius-control);
 }
 
@@ -101,7 +102,7 @@ html, body {
   /* One sidebar, not two. The launch form moved into a popover, which bought the
      stage ~264px — the difference between six cramped terminals and eight
      readable ones. lib/layout.js sizes `fit` against this width. */
-  grid-template-columns: 264px 1fr;
+  grid-template-columns: var(--sidebar-w, 264px) 4px 1fr;
   height: 100vh;
 }
 
@@ -988,4 +989,30 @@ select { appearance: none; cursor: pointer; }
   outline: 2px solid var(--accent-line);
   outline-offset: -2px;
   border-radius: 5px;
+}
+
+/* ---------- Sidebar divider ---------- */
+/* 4px of grid track, widened to a comfortable target by a padded hit area. */
+.sidebar-resize {
+  position: relative;
+  cursor: col-resize;
+  background: var(--line);
+  border: none;
+  padding: 0;
+  touch-action: none;
+}
+.sidebar-resize::after {
+  content: "";
+  position: absolute;
+  inset: 0 -4px;         /* 12px total target without moving the visible line */
+}
+.sidebar-resize:hover, body.is-resizing .sidebar-resize { background: var(--accent-line); }
+.sidebar-resize:focus-visible { outline: 2px solid var(--accent-line); outline-offset: -1px; }
+/* while dragging, the pointer must not select text or become an I-beam over panes */
+body.is-resizing { cursor: col-resize; user-select: none; }
+body.is-resizing .term-host { pointer-events: none; }
+
+@media (max-width: 960px) {
+  /* stacked layout: a vertical divider has nothing to divide */
+  .sidebar-resize { display: none; }
 }

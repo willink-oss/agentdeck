@@ -72,6 +72,11 @@
       </div>
     </aside>
 
+    <!-- Draggable divider. A fixed sidebar truncated exactly the part that
+         identifies a repository (its name), so the user sets the width. -->
+    <div id="sidebar-resize" class="sidebar-resize" role="separator" aria-orientation="vertical"
+         tabindex="0" data-i18n-aria-label="sidebar.resize"></div>
+
     <main id="stage">
       <div id="stage-toolbar" class="stage-toolbar">
         <div id="agent-chips" class="agent-chips" role="group" data-i18n-aria-label="quick.label"></div>
@@ -300,6 +305,7 @@
   <script src="../lib/repos.js"></script>
   <script src="../lib/gitstat.js"></script>
   <script src="../lib/layout.js"></script>
+  <script src="../lib/sidebar.js"></script>
   <script src="../lib/workspace.js"></script>
   <script src="../lib/schedule.js"></script>
   <script src="../lib/fuzzy.js"></script>

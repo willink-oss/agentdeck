@@ -668,6 +668,18 @@ async function closeHard(app) {
       /agentdeck\/e2e-persist/.test(git(repo, 'log', '-1', '--pretty=%s')),
     'restart: validated worktree branch merges successfully into the base checkout');
 
+    // -- sidebar width: the divider is draggable, bounded, and persisted -------
+    const sidebarWidthOf = () => win.evaluate(() => document.querySelector('#sidebar').getBoundingClientRect().width);
+    await win.focus('#sidebar-resize');
+    await win.keyboard.press('ArrowRight');
+    ok(Math.round(await sidebarWidthOf()) === 272, 'arrow keys resize the sidebar');
+    await win.evaluate(() => applySidebarWidth(9999, true));
+    const atMax = Math.round(await sidebarWidthOf());
+    const stageAtMax = await win.evaluate(() => document.querySelector('#stage').getBoundingClientRect().width);
+    ok(atMax === 480 && stageAtMax >= 841,
+      `the sidebar is bounded so the stage keeps two fit columns (${atMax}px / stage ${Math.round(stageAtMax)}px)`);
+    await win.evaluate(() => applySidebarWidth(264, true));
+
     // -- renderer crash: PTYs must not outlive the window that was driving them --
     // Last, because it destroys the renderer. A surviving PTY is an agent that
     // keeps spending tokens and editing the repo with nobody able to see it.
