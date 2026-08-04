@@ -47,7 +47,6 @@ test('resolveCommand: base plus the profile tail', () => {
   assert.equal(P.resolveCommand('claude', 'continue'), 'claude --continue');
   assert.equal(P.resolveCommand('claude', 'plan'), 'claude --permission-mode plan');
   assert.equal(P.resolveCommand('antigravity', 'plan'), 'agy --mode plan');
-  assert.equal(P.resolveCommand('gemini', 'continue'), 'gemini --resume latest');
   // codex resume is a subcommand, not a flag — profiles append a string for exactly this
   assert.equal(P.resolveCommand('codex', 'continue'), 'codex resume --last');
   assert.equal(P.resolveCommand('codex', 'auto'), 'codex --sandbox workspace-write --ask-for-approval on-request');

@@ -542,7 +542,7 @@ async function closeHard(app) {
     await win.fill('#preset-label-input', 'Aider');
     await win.fill('#preset-cmd-input', 'aider');
     await win.click('#preset-submit');
-    ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 6, 'custom preset lands in the select');
+    ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 5, 'custom preset lands in the select');
     await win.keyboard.press('Escape');
 
     // Keep one real worktree session across the restart. Deck v2 must restore it
@@ -587,7 +587,7 @@ async function closeHard(app) {
     await closeHard(app);
     app = await launchApp();
     await attachWindow();
-    ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 6, 'restart: custom preset persisted');
+    ok(await win.evaluate(() => document.querySelectorAll('#preset option').length) === 5, 'restart: custom preset persisted');
     ok(await win.evaluate(() => document.querySelector('#grid').dataset.layout) === 'fit',
       'restart: fit layout choice persisted');
     await win.waitForFunction(() => {

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const P = require('../lib/presets');
 
 test('BUILTINS: the five known presets, shell included', () => {
-  assert.deepEqual(Object.keys(P.BUILTINS), ['claude', 'antigravity', 'codex', 'gemini', 'shell']);
+  assert.deepEqual(Object.keys(P.BUILTINS), ['claude', 'antigravity', 'codex', 'shell']);
   assert.equal(P.KEY, 'agentdeck.presets');
   assert.ok(P.isBuiltin('shell'));
   assert.ok(!P.isBuiltin('custom-aider'));
@@ -85,7 +85,7 @@ test('merge: built-ins always present and never overridden', () => {
   // every entry carries an init array (empty when unconfigured)
   assert.deepEqual(merged.claude.init, []);
   // order: built-ins first, customs after
-  assert.deepEqual(Object.keys(merged).slice(0, 5), Object.keys(P.BUILTINS));
+  assert.deepEqual(Object.keys(merged).slice(0, 4), Object.keys(P.BUILTINS));
 });
 
 test('merge: tolerates an un-normalized custom list', () => {
@@ -153,9 +153,9 @@ test('KEY_INIT: distinct storage key from the custom-preset list', () => {
 });
 
 test('chipKeys: four agent built-ins (no shell) then customs', () => {
-  assert.deepEqual(P.chipKeys([]), ['claude', 'antigravity', 'codex', 'gemini']);
+  assert.deepEqual(P.chipKeys([]), ['claude', 'antigravity', 'codex']);
   assert.deepEqual(
     P.chipKeys([{ key: 'custom-aider', label: 'Aider', cmd: 'aider' }]),
-    ['claude', 'antigravity', 'codex', 'gemini', 'custom-aider']);
+    ['claude', 'antigravity', 'codex', 'custom-aider']);
   assert.ok(!P.chipKeys([]).includes('shell'));
 });

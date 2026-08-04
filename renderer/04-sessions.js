@@ -81,6 +81,42 @@ async function launch({ presetKey, command, name, cwd, worktree, branch, profile
   term.open(termHost);
   requestAnimationFrame(() => { try { fit.fit(); } catch (_) {} });
   term.onData((d) => window.deck.input(id, d));
+  // Enter submits; Shift+Enter has to mean "newline, don't submit". xterm would
+  // otherwise send a plain CR for both. lib/hooks.js holds the sequence.
+  term.attachCustomKeyEventHandler((e) => {
+    if (!Hooks.isShiftEnter(e)) return true;
+    // Returning false stops xterm handling the key, but NOT the browser: the
+    // helper textarea would still take the Enter and emit its own CR, which
+    // submits the continuation line we just opened. Both have to be silenced.
+    e.preventDefault();
+    window.deck.input(id, Hooks.SHIFT_ENTER);
+    return false;
+  });
+
+  // Dropping a file on a terminal types its path, which is how these agents take
+  // an image or a file reference. The document-level guard in 03-deck.js has
+  // already called preventDefault (so Chromium cannot navigate to it); this adds
+  // the useful behaviour on top.
+  termHost.addEventListener('dragover', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    try { e.dataTransfer.dropEffect = 'copy'; } catch (_) {}
+    termHost.classList.add('drop-target');
+  });
+  termHost.addEventListener('dragleave', () => termHost.classList.remove('drop-target'));
+  termHost.addEventListener('drop', (e) => {
+    termHost.classList.remove('drop-target');
+    if (!hasFiles(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    const paths = [...(e.dataTransfer.files || [])].map((f) => window.deck.pathForFile(f));
+    const text = Hooks.dropText(paths);
+    if (!text) return;
+    markActive(id);
+    // a trailing space so the next dropped path (or typed word) does not run into it
+    window.deck.input(id, text + ' ');
+    try { term.focus(); } catch (_) {}
+  });
+
 
   const ro = new ResizeObserver(() => {
     try { fit.fit(); window.deck.resize(id, term.cols, term.rows); } catch (_) {}

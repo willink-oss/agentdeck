@@ -1016,3 +1016,10 @@ body.is-resizing .term-host { pointer-events: none; }
   /* stacked layout: a vertical divider has nothing to divide */
   .sidebar-resize { display: none; }
 }
+
+/* A terminal that will accept a dropped file says so before the drop. */
+.term-host.drop-target {
+  outline: 2px dashed var(--accent-line);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}

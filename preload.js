@@ -1,6 +1,15 @@
 'use strict';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
+
+/* Electron 32 removed File.path, so the renderer can no longer learn where a
+ * dropped file lives. webUtils.getPathForFile is the replacement and is only
+ * reachable from preload — which is the point: the renderer gets a path for a
+ * file the USER dropped, and no way to ask about arbitrary ones. */
+function pathForFile(file) {
+  try { return webUtils && webUtils.getPathForFile ? webUtils.getPathForFile(file) : ''; }
+  catch (_) { return ''; }
+}
 
 contextBridge.exposeInMainWorld('deck', {
   platform: process.platform, // sync: keyboard chords are chosen before any IPC answers
@@ -37,6 +46,7 @@ contextBridge.exposeInMainWorld('deck', {
   onScheduleFire: (cb) => ipcRenderer.on('schedule:fire', (_e, p) => cb(p)),
   scheduleReady: () => ipcRenderer.send('schedule:ready'),
   onHookEvent: (cb) => ipcRenderer.on('hook:event', (_e, p) => cb(p)),
+  pathForFile,
   onConfirmClose: (cb) => ipcRenderer.on('app:confirm-close', (_e, p) => cb(p)),
   closeDecision: (proceed) => ipcRenderer.send('app:close-decision', { proceed }),
 });

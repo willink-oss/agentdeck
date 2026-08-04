@@ -212,3 +212,70 @@ test('every state a hook can produce is one the pane knows how to render', () =>
     assert.ok(known.has(state), `${event} -> ${state}`);
   }
 });
+
+/* ---- Shift+Enter --------------------------------------------------------- */
+
+test('SHIFT_ENTER: backslash + CR, and only one line terminator', () => {
+  assert.equal(H.SHIFT_ENTER, '\\\r');
+  // CRLF would be two terminators to a PTY: the continuation opens and then
+  // immediately submits. Verified against a real zsh before this was pinned.
+  assert.ok(!H.SHIFT_ENTER.includes('\n'), 'no LF alongside the CR');
+});
+
+test('isShiftEnter: the plain chord only', () => {
+  const base = { type: 'keydown', key: 'Enter' };
+  assert.equal(H.isShiftEnter({ ...base, shiftKey: true }), true);
+  assert.equal(H.isShiftEnter(base), false);
+  for (const mod of ['ctrlKey', 'metaKey', 'altKey']) {
+    assert.equal(H.isShiftEnter({ ...base, shiftKey: true, [mod]: true }), false, mod);
+  }
+  assert.equal(H.isShiftEnter({ type: 'keyup', key: 'Enter', shiftKey: true }), false, 'keyup');
+  assert.equal(H.isShiftEnter({ type: 'keydown', key: 'a', shiftKey: true }), false);
+  assert.equal(H.isShiftEnter(null), false);
+});
+
+/* ---- dropped file paths --------------------------------------------------- */
+
+test('quotePath: a plain path needs no quoting', () => {
+  assert.equal(H.quotePath('/a/b/c.png'), '/a/b/c.png');
+  assert.equal(H.quotePath('relative/file.txt'), 'relative/file.txt');
+});
+
+test('quotePath: whitespace and shell metacharacters are quoted', () => {
+  assert.equal(H.quotePath('/a/My Files/x.png'), "'/a/My Files/x.png'");
+  for (const p of ['/a/b&c', '/a/b;c', '/a/b|c', '/a/$HOME', '/a/`x`', '/a/(x)', '/a/*.png', '/a/#1']) {
+    assert.ok(H.quotePath(p).startsWith("'"), p);
+  }
+});
+
+test('quotePath: an embedded quote is escaped the POSIX way', () => {
+  assert.equal(H.quotePath("/a/it's.png"), "'/a/it'\\''s.png'");
+});
+
+test('quotePath: a path containing a control character is refused, not sanitised', () => {
+  // a newline here would submit the prompt as if the user had pressed Enter
+  assert.equal(H.quotePath('/a/evil\nrm -rf /'), '');
+  assert.equal(H.quotePath('/a/bell\x07'), '');
+  assert.equal(H.quotePath('/a/esc\x1b[31m'), '');
+});
+
+test('quotePath: junk yields nothing to type', () => {
+  for (const junk of [null, undefined, '', 0]) assert.equal(H.quotePath(junk), '');
+});
+
+test('dropText: joins, quotes, and drops duplicates', () => {
+  assert.equal(H.dropText(['/a/x.png', '/b/y z.png']), "/a/x.png '/b/y z.png'");
+  assert.equal(H.dropText(['/a/x.png', '/a/x.png']), '/a/x.png');
+  assert.equal(H.dropText('/a/one.png'), '/a/one.png');
+});
+
+test('dropText: a refused path is skipped, the rest still type', () => {
+  assert.equal(H.dropText(['/a/ok.png', '/a/bad\nx', '/b/also ok.png']),
+    "/a/ok.png '/b/also ok.png'");
+});
+
+test('dropText: nothing usable means nothing typed', () => {
+  assert.equal(H.dropText([]), '');
+  assert.equal(H.dropText(['', null]), '');
+  assert.equal(H.dropText(null), '');
+});

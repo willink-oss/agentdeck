@@ -185,6 +185,15 @@ const GitStat = window.GitStat;
 const Layout = window.Layout;
 const Workspace = window.Workspace;
 const Fuzzy = window.Fuzzy;
+const Hooks = window.Hooks;
+
+/** True when a drag carries actual files (rather than text or an internal pane drag). */
+function hasFiles(e) {
+  const dt = e && e.dataTransfer;
+  if (!dt) return false;
+  // `types` is the only thing readable during dragover; `files` is empty until drop
+  return Array.prototype.includes.call(dt.types || [], 'Files');
+}
 
 // ---- i18n (ja / en) ---------------------------------------------------------
 // Every user-facing string is keyed in lib/i18n.js; t(key, params) returns the
