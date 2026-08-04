@@ -342,24 +342,20 @@ async function closeHard(app) {
     `pane identifies its agent by rail + glyph + badge (${identity.tone}/${identity.glyph}/${identity.badge})`);
 
     // -- state filter: narrow the stage to what is waiting, then clear ----------
-    // Flag exactly one. The idle heuristic can have flagged others already —
-    // Windows shells print a prompt immediately, which is precisely what it looks
-    // for — so clear first rather than assume this is the only one.
-    await win.evaluate(() => {
+    // All in one evaluate, with no round-trip in the middle: any terminal output
+    // clears the attention flag (onData does that deliberately), so a test that
+    // sets the flag, awaits, then reads is racing the shell. Set, filter, and
+    // compare synchronously — and assert the invariant rather than a count.
+    const filtered = await win.evaluate(() => {
       for (const s of sessions.values()) clearAttention(s);
       const [id, s] = [...sessions][0];
       setAttention(s, id);
-      renderRepos();
-    });
-    await win.click('.stf-btn[data-state="attention"]');
-    // Assert the invariant, not a count: visible panes are exactly the flagged
-    // ones. A count would race the idle heuristic flagging another session.
-    const filtered = await win.evaluate(() => {
+      setStateFilter('attention');
       const visible = [...document.querySelectorAll('.pane')]
         .filter((p) => p.style.display !== 'none').map((p) => p.dataset.id).sort();
-      const flagged = [...sessions].filter(([, s]) => s.attention).map(([id]) => id).sort();
+      const flagged = [...sessions].filter(([, e]) => e.attention).map(([k]) => k).sort();
       return {
-        matches: visible.length > 0 && JSON.stringify(visible) === JSON.stringify(flagged),
+        matches: visible.length === 1 && JSON.stringify(visible) === JSON.stringify(flagged),
         visible: visible.length,
         flagged: flagged.length,
         pressed: document.querySelector('.stf-btn[data-state="attention"]').getAttribute('aria-pressed'),
