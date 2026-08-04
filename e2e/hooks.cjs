@@ -47,8 +47,16 @@ const postTo = (url, body) => new Promise((resolve) => {
   const files = fs.existsSync(hooksDir) ? fs.readdirSync(hooksDir) : [];
   ok(files.length === 1, `a settings file was written for the session (${files.join(',')})`);
   const settingsPath = path.join(hooksDir, files[0]);
+  // POSIX mode bits only mean something where the filesystem has them. On
+  // Windows NTFS ignores them (node reports 666) and the token is protected by
+  // the ACL that %APPDATA% already carries — user-only by default. Assert the
+  // guarantee each platform can actually make.
   const mode = (fs.statSync(settingsPath).mode & 0o777).toString(8);
-  ok(mode === '600', `the settings file is 0600, not world-readable (${mode})`);
+  if (process.platform === 'win32') {
+    ok(settingsPath.startsWith(ud), `the settings file lives under the per-user data dir (mode ${mode} is not meaningful on NTFS)`);
+  } else {
+    ok(mode === '600', `the settings file is 0600, not world-readable (${mode})`);
+  }
 
   const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
   const url = settings.hooks.Notification[0].hooks[0].url;
