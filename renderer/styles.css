@@ -158,9 +158,6 @@ html, body {
   border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
   max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none;
 }
-.repo-stat { font-size: 9.5px; flex: none; white-space: nowrap; display: inline-flex; gap: 4px; }
-.repo-stat .stat-add { color: var(--live); }
-.repo-stat .stat-del { color: var(--danger); }
 .repo-count {
   font-size: 9px; font-weight: 700; color: var(--accent-fg); background: var(--accent);
   border-radius: 999px; padding: 1px 6px; flex: none;

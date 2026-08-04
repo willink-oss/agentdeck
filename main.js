@@ -158,39 +158,40 @@ function saveSchedules(list) {
   }
 }
 
-const GIT_INFO_TTL = 4000;
+/* The sidebar now reads only a branch name and a worktree list — both cheap and
+ * both slow-moving. It used to also carry a diff-stat, which meant a
+ * `git diff --numstat HEAD` per repository AND per worktree on every poll: with
+ * four repositories and sixteen worktrees that measured 32 git spawns and ~3.0s
+ * of work every 7 seconds, i.e. ~42% of a core burned continuously whether or
+ * not any session was running. The stat is gone; the interval can relax with it. */
+const GIT_INFO_TTL = 20000;
 const gitInfoCache = new Map(); // path -> { at, info }
 async function safeGit(args, cwd) { try { return await git(args, cwd); } catch (_) { return ''; } }
 
 /** Merge / PR preconditions + conflict-safe merge (lib/session-merge.js). */
 const sessionMerge = createSessionMerge({ git, safeGit, currentBranch });
-async function worktreeStat(dir) {
-  return GitStat.parseNumstat(await safeGit(['diff', '--numstat', 'HEAD'], dir));
-}
 async function gitInfoFor(dir) {
   const hit = gitInfoCache.get(dir);
   if (hit && (Date.now() - hit.at) < GIT_INFO_TTL) return hit.info;
   let info;
   try {
     if (!(await isRepo(dir))) {
-      info = { isRepo: false, branch: '', stat: null, worktrees: [] };
+      info = { isRepo: false, branch: '', worktrees: [] };
     } else {
       const branch = await currentBranch(dir);
-      const stat = await worktreeStat(dir);
       let root = dir;
       try { root = (await repoRoot(dir)) || dir; } catch (_) {}
       const rootNorm = Repos.normalizePath(root);
       const wts = GitStat.parseWorktreeList(await safeGit(['worktree', 'list', '--porcelain'], root))
         .filter((w) => !w.bare && Repos.normalizePath(w.path) !== rootNorm);
-      const worktrees = await Promise.all(wts.map(async (w) => ({
+      const worktrees = wts.map((w) => ({
         path: w.path,
         branch: w.detached ? '' : w.branch,
         isAgentdeck: GitStat.isAgentdeckWorktreePath(w.path),
-        stat: await worktreeStat(w.path),
-      })));
-      info = { isRepo: true, branch, stat, worktrees };
+      }));
+      info = { isRepo: true, branch, worktrees };
     }
-  } catch (_) { info = { isRepo: false, branch: '', stat: null, worktrees: [] }; }
+  } catch (_) { info = { isRepo: false, branch: '', worktrees: [] }; }
   gitInfoCache.set(dir, { at: Date.now(), info });
   return info;
 }

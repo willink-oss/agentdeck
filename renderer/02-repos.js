@@ -26,7 +26,7 @@ function flashRepoMsg(text) {
 /** Signature of the git-derived fields, to skip re-renders when nothing changed. */
 let reposSig = '';
 function computeSig(list) {
-  return JSON.stringify((list || []).map((r) => ({ id: r.id, branch: r.branch, stat: r.stat, worktrees: r.worktrees })));
+  return JSON.stringify((list || []).map((r) => ({ id: r.id, branch: r.branch, worktrees: r.worktrees })));
 }
 function setRepos(list) { repos = list || []; reposSig = computeSig(repos); }
 
@@ -204,21 +204,6 @@ function sessionsByRepo() {
   }
   return byRepo;
 }
-/** "+X" / "-Y" coloured chip, or null when there are no line changes. */
-function statBadge(stat) {
-  if (!GitStat.formatStat(stat)) return null;
-  const st = document.createElement('span');
-  st.className = 'repo-stat';
-  if (stat.insertions) {
-    const a = document.createElement('span');
-    a.className = 'stat-add'; a.textContent = '+' + stat.insertions; st.appendChild(a);
-  }
-  if (stat.deletions) {
-    const d = document.createElement('span');
-    d.className = 'stat-del'; d.textContent = '-' + stat.deletions; st.appendChild(d);
-  }
-  return st;
-}
 /** A git worktree row (branch + diff stat) under a repo. Informational. */
 function worktreeRow(w) {
   const row = document.createElement('div');
@@ -231,12 +216,10 @@ function worktreeRow(w) {
   br.title = w.path;
   row.appendChild(icon);
   row.appendChild(br);
-  const st = statBadge(w.stat);
-  if (st) row.appendChild(st);
   return row;
 }
 /** Build one group box — a registered repo, or the orphan "Other" group. */
-function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees, home, sessList }) {
+function buildGroup({ key, name, nameDim, path, branch, repoId, worktrees, home, sessList }) {
   const item = document.createElement('div');
   item.className = 'repo-item' + (repoId && repoId === activeRepoId ? ' active' : '') + (home ? ' is-home' : '');
   if (repoId) item.dataset.repoId = repoId;
@@ -261,8 +244,6 @@ function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees,
     b.title = branch;
     row.appendChild(b);
   }
-  const st = statBadge(stat);
-  if (st) row.appendChild(st);
   if (sessList.length) {
     const c = document.createElement('span');
     c.className = 'repo-count' + (sessList.some(([, s]) => s.attention) ? ' attention' : '');
@@ -351,7 +332,7 @@ function renderRepos() {
   for (const repo of effectiveRepos()) {
     repoListEl.appendChild(buildGroup({
       key: repo.id, name: repo.name, path: repo.path, branch: repo.branch,
-      repoId: repo.id, stat: repo.stat, worktrees: repo.worktrees,
+      repoId: repo.id, worktrees: repo.worktrees,
       home: !!repo.isHome, sessList: byRepo.get(repo.id) || [],
     }));
   }
@@ -390,5 +371,9 @@ stateFilterEl.addEventListener('click', (e) => {
   // clicking the active filter again clears it — no dead click on a toggle group
   if (b) setStateFilter(b.dataset.state === activeStateFilter ? 'all' : b.dataset.state);
 });
-setInterval(refreshReposGit, 7000);
+/* 30s, not 7s. The poll used to carry a diff-stat that people watched change as
+ * an agent worked; what is left is a branch name and a worktree list, neither of
+ * which moves on that timescale. The focus listener below still refreshes the
+ * moment the window comes back, which is when a stale branch would be noticed. */
+setInterval(refreshReposGit, 30000);
 window.addEventListener('focus', refreshReposGit);
