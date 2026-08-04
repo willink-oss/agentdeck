@@ -1,5 +1,38 @@
 'use strict';
 
+/* Draw the terminal on the GPU instead of building a DOM tree per row.
+ *
+ * xterm's default DOM renderer is what makes a deck of live agents expensive:
+ * every frame it rebuilds a <span> per style run, on the one renderer thread all
+ * panes share. Measured on an M3 Air with panes redrawing a full 40-row viewport
+ * at 10Hz (an agent TUI's real shape), CPU over the whole app:
+ *
+ *     8 panes   DOM 56.6%  ->  WebGL 36.1%   (renderer alone 41.9% -> 18.0%)
+ *    16 panes   DOM 74.8%  ->  WebGL 54.5%   (renderer alone 53.6% -> 28.9%)
+ *
+ * Frame rate was a pinned 60fps either way, which is exactly why this went
+ * unnoticed: the cost never showed up as jank, it showed up as a fanless laptop
+ * running hot and throttling everything else on the machine.
+ *
+ * Every step here can fail on a machine with no usable GPU, and Chromium caps
+ * how many WebGL contexts one renderer may hold — past the cap the oldest are
+ * killed. So this is strictly best-effort: on any failure, and on a context
+ * loss, dispose the addon and let xterm fall back to the DOM renderer. A slower
+ * terminal is fine; a blank one is not.
+ */
+function attachWebglRenderer(term) {
+  const Ctor = window.WebglAddon && window.WebglAddon.WebglAddon;
+  if (!Ctor) return null;
+  try {
+    const addon = new Ctor();
+    addon.onContextLoss(() => { try { addon.dispose(); } catch (_) {} });
+    term.loadAddon(addon); // must come after term.open(): it needs the element
+    return addon;
+  } catch (_) {
+    return null; // no GPU, context cap reached — the DOM renderer still works
+  }
+}
+
 // ---- session creation ------------------------------------------------------
 async function launch({ presetKey, command, name, cwd, worktree, branch, profileId, restoreMeta }) {
   const preset = PRESETS[presetKey] || PRESETS.shell;
@@ -79,6 +112,7 @@ async function launch({ presetKey, command, name, cwd, worktree, branch, profile
   const search = new ((window.SearchAddon && window.SearchAddon.SearchAddon) || window.SearchAddon)();
   term.loadAddon(search);
   term.open(termHost);
+  attachWebglRenderer(term);
   requestAnimationFrame(() => { try { fit.fit(); } catch (_) {} });
   term.onData((d) => window.deck.input(id, d));
   // Enter submits; Shift+Enter has to mean "newline, don't submit". xterm would
