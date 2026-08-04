@@ -42,8 +42,16 @@ const termText = (win) => win.evaluate(() => {
   await win.waitForTimeout(1200);
   const out = await termText(win);
   console.log('--- terminal ---\n' + out.slice(-500) + '\n---------------');
-  ok(/^AB$/m.test(out), 'Shift+Enter continues the line instead of submitting (shell printed AB)');
-  ok(!/command not found/i.test(out), 'the shell never saw a premature submit');
+  if (process.platform === 'win32') {
+    // PowerShell continues lines with a backtick, not a backslash, so the shell
+    // semantics differ. What Agent Deck is responsible for is the sequence
+    // reaching the PTY — and the agents this exists for (Claude Code et al)
+    // read backslash-continuation in their own input box regardless of host shell.
+    ok(/echo A\\/.test(out.replace(/\n/g, '')), 'Shift+Enter typed the continuation sequence into the PTY');
+  } else {
+    ok(/^AB$/m.test(out), 'Shift+Enter continues the line instead of submitting (shell printed AB)');
+    ok(!/command not found/i.test(out), 'the shell never saw a premature submit');
+  }
 
   // A file drop types the quoted path into the same shell.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(),'kd files-'));
