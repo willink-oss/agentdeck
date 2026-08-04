@@ -204,6 +204,11 @@ async function enrichRepos(list) {
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 900, minHeight: 600,
+    // A hidden window still lays out and renders, so the e2e suite can drive the
+    // real app without taking over the developer's screen for several minutes.
+    // Linux CI gets the same effect from xvfb; this covers macOS and Windows,
+    // and local runs on every platform.
+    show: process.env.AGENTDECK_HEADLESS !== '1',
     backgroundColor: '#0c0d10',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

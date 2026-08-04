@@ -24,7 +24,7 @@ const postTo = (url, body) => new Promise((resolve) => {
   const ud = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-ud-'));
   const app = await electron.launch({
     args: [path.join(ROOT, 'main.js'), `--user-data-dir=${ud}`],
-    env: { ...process.env, AGENTDECK_UPDATE_FEED: 'https://127.0.0.1:9/none' },
+    env: { ...process.env, AGENTDECK_UPDATE_FEED: 'https://127.0.0.1:9/none', AGENTDECK_HEADLESS: '1' },
     timeout: 60000,
   });
   const win = await app.firstWindow({ timeout: 60000 });

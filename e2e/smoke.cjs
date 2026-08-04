@@ -44,7 +44,7 @@ async function closeHard(app) {
     // Electron itself (not by main.js) so each run gets an isolated, throwaway profile.
     args: [path.join(ROOT, 'main.js'), `--user-data-dir=${userDataDir}`],
     // Fail the update check fast instead of reaching GitHub (and possibly hanging on rate limits) in CI.
-    env: { ...process.env, AGENTDECK_UPDATE_FEED: 'https://127.0.0.1:9/none' },
+    env: { ...process.env, AGENTDECK_UPDATE_FEED: 'https://127.0.0.1:9/none', AGENTDECK_HEADLESS: '1' },
     timeout: TIMEOUT,
   });
 

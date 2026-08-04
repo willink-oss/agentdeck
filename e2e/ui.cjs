@@ -70,7 +70,7 @@ async function closeHard(app) {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentdeck-ui-ud-'));
   const launchApp = () => electron.launch({
     args: [path.join(ROOT, 'main.js'), `--user-data-dir=${userDataDir}`],
-    env: { ...process.env, AGENTDECK_UPDATE_FEED: 'https://127.0.0.1:9/none' },
+    env: { ...process.env, AGENTDECK_UPDATE_FEED: 'https://127.0.0.1:9/none', AGENTDECK_HEADLESS: '1' },
     timeout: TIMEOUT,
   });
   let app = await launchApp();
