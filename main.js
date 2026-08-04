@@ -16,6 +16,9 @@ const Schedule = require('./lib/schedule');
 const { createValidateWorktreeIdentity } = require('./lib/worktree-identity');
 const { createSessionMerge } = require('./lib/session-merge');
 const { createLogger } = require('./lib/logger');
+const Hooks = require('./lib/hooks');
+const http = require('http');
+const crypto = require('crypto');
 const { autoUpdater } = require('electron-updater');
 
 const pexec = promisify(execFile);
@@ -241,6 +244,92 @@ function attachCrashReap(win) {
   win.webContents.on('responsive', () => log.info('renderer.responsive'));
 }
 
+// ---- hook listener ---------------------------------------------------------
+/* Agents report their own state here (permission needed, turn finished) instead
+ * of us inferring it from terminal output. See lib/hooks.js for the protocol and
+ * the reasoning about what a local listener has to refuse.
+ *
+ * Bound to loopback on an ephemeral port, started on first use and never
+ * advertised. Each session gets its own token; an event naming a session that is
+ * not live, or carrying the wrong token, is indistinguishable from a 404. */
+/** agentdeck session id -> { token, settingsPath } */
+const hookTokens = new Map();
+let hookServer = null;
+let hookPort = 0;
+
+function hookLookup(sessionId) {
+  const entry = hookTokens.get(sessionId);
+  return entry ? entry.token : null;
+}
+
+function startHookServer() {
+  if (hookServer) return Promise.resolve(hookPort);
+  return new Promise((resolve) => {
+    const server = http.createServer((req, res) => {
+      const reply = (code) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end('{}'); };
+      let auth;
+      try { auth = Hooks.authorize({ method: req.method, pathname: req.url, lookup: hookLookup }); }
+      catch (err) { log.fail('hook.authorizeFailed', err); reply(500); return; }
+      if (!auth.ok) { reply(auth.code); return; }
+
+      let body = '';
+      let tooBig = false;
+      req.on('data', (chunk) => {
+        if (tooBig) return;
+        body += chunk;
+        // a hook payload carries a transcript PATH, not a transcript
+        if (body.length > Hooks.MAX_BODY_BYTES) { tooBig = true; body = ''; req.destroy(); }
+      });
+      req.on('error', () => {});
+      req.on('end', () => {
+        if (tooBig) { log.warn('hook.bodyTooLarge', { id: auth.sessionId }); return; }
+        const evt = Hooks.normalizeEvent(body);
+        // Always 200: a non-2xx is a non-blocking error on the agent's side, but
+        // there is no reason to make it retry an event we simply do not act on.
+        reply(200);
+        if (!evt) return;
+        const win = liveWindow();
+        if (win) win.webContents.send('hook:event', { id: auth.sessionId, event: evt.event, state: evt.state });
+      });
+    });
+    server.on('error', (err) => { log.fail('hook.serverFailed', err); resolve(0); });
+    // 127.0.0.1 explicitly, not localhost: no DNS, no accidental ::/0
+    server.listen(0, '127.0.0.1', () => {
+      hookServer = server;
+      hookPort = server.address().port;
+      log.info('hook.listening', { port: hookPort });
+      resolve(hookPort);
+    });
+  });
+}
+
+/** Register a session and write the settings file its agent will be pointed at.
+ *  Returns the path, or '' when hooks are unavailable for this launch. */
+async function registerHooks(sessionId) {
+  const port = await startHookServer();
+  if (!port) return '';
+  const token = crypto.randomBytes(Hooks.TOKEN_BYTES).toString('hex');
+  const settings = Hooks.buildClaudeSettings({ url: Hooks.hookUrl({ port, sessionId, token }) });
+  if (!settings) return '';
+  const dir = path.join(app.getPath('userData'), 'hooks');
+  const file = path.join(dir, `${sessionId}.json`);
+  try {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    // 0600: the token lives here rather than in argv, where `ps` would show it
+    fs.writeFileSync(file, JSON.stringify(settings), { mode: 0o600 });
+  } catch (err) { log.fail('hook.settingsWriteFailed', err); return ''; }
+  hookTokens.set(sessionId, { token, settingsPath: file });
+  return file;
+}
+
+/** Forget a session's token and remove its settings file. */
+function unregisterHooks(sessionId) {
+  const entry = hookTokens.get(sessionId);
+  if (!entry) return;
+  hookTokens.delete(sessionId);
+  try { fs.unlinkSync(entry.settingsPath); } catch (_) { /* already gone */ }
+}
+
 /** Kill every tracked PTY and forget its Git context. */
 function reapAllPtys(why) {
   if (!ptys.size) return;
@@ -330,7 +419,7 @@ const INIT_MAX_WAIT_MS = 12_000;
 
 // ---- IPC: spawn (with optional git worktree isolation) ---------------------
 ipcMain.handle('pty:spawn', async (event, opts) => {
-  const { id, cwd, shell, cols, rows, startupCommand, initCommands, worktree, restoreGit } = opts || {};
+  const { id, cwd, shell, cols, rows, startupCommand, initCommands, worktree, restoreGit, hookBinary } = opts || {};
   const home = os.homedir();
   let effectiveCwd = cwd && cwd.trim() ? cwd : home;
   let gitMeta = null;
@@ -440,10 +529,23 @@ ipcMain.handle('pty:spawn', async (event, opts) => {
     clearInitTimers();
     if (!sender.isDestroyed()) sender.send('pty:exit', { id, exitCode });
     ptys.delete(id);
+    unregisterHooks(id);
   });
 
   if (startupCommand && startupCommand.trim()) {
-    setTimeout(() => { const live = ptys.get(id); if (live) live.write(startupCommand + '\r'); }, STARTUP_DELAY_MS);
+    // Point the agent's hooks at us, so the pane learns "waiting for you" from
+    // the agent rather than from guessing at terminal output. Only when the
+    // command really is that binary (see canInjectSettings) — otherwise the
+    // heuristic stays in charge, which is what happens for every other agent too.
+    let command = startupCommand;
+    if (hookBinary && Hooks.canInjectSettings(command, hookBinary)) {
+      const settingsPath = await registerHooks(id);
+      if (settingsPath) {
+        command += ` --settings ${JSON.stringify(settingsPath)}`;
+        log.info('hook.injected', { id });
+      }
+    }
+    setTimeout(() => { const live = ptys.get(id); if (live) live.write(command + '\r'); }, STARTUP_DELAY_MS);
   }
   if (!initDone) {
     // start watching for quiet only after the startup command has been issued (so
@@ -471,6 +573,7 @@ ipcMain.on('pty:kill', (_e, { id }) => {
   const p = ptys.get(id);
   if (p) { try { p.kill(); } catch (_) {} ptys.delete(id); }
   gitContexts.delete(id);
+  unregisterHooks(id);
 });
 
 // ---- IPC: git diff review --------------------------------------------------

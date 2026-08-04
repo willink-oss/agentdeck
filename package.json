@@ -22,7 +22,7 @@
     "rebuild": "electron-rebuild -f -w node-pty",
     "test": "node --test",
     "smoke": "node e2e/smoke.cjs",
-    "e2e": "node e2e/flow.cjs && node e2e/ui.cjs",
+    "e2e": "node e2e/flow.cjs && node e2e/ui.cjs && node e2e/hooks.cjs",
     "pack:unsigned": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 --x64 -c.mac.notarize=false --publish never",
     "dist": "electron-builder --mac --arm64 --x64 --publish never",
     "dist:win": "electron-builder --win --x64 --publish never",

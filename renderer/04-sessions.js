@@ -115,6 +115,10 @@ async function launch({ presetKey, command, name, cwd, worktree, branch, profile
     // post-launch commands are preset-level: derived from the resolved preset so
     // every entry point (form, chips, deck restore, schedule) gets them for free
     initCommands: (preset.init && preset.init.length) ? preset.init : [],
+    // Claude Code is the one CLI whose hooks we speak so far. Naming the binary
+    // (rather than the preset key) lets main refuse to edit a command that is
+    // not actually an invocation of it.
+    hookBinary: presetKey === 'claude' ? 'claude' : '',
     worktree: { enabled: wantWorktree, branch: wtName },
     restoreGit: restored.worktreePath ? {
       baseSha: restored.baseSha, branch: restored.branch, baseBranch: restored.baseBranch,
@@ -268,6 +272,22 @@ function termTailLines(term, n) {
   } catch (_) { return []; }
 }
 
+// ---- state from the agent itself (hooks) ------------------------------------
+// When an agent reports its own state, that is authoritative and the heuristic
+// below stops second-guessing it for that session. The heuristic remains for
+// every agent that has no hooks surface, and for a session whose hooks never
+// arrive (a wrapper script, an older CLI) — hookDriven only flips on the first
+// event actually received, so nothing is lost by trying.
+window.deck.onHookEvent(({ id, event, state } = {}) => {
+  const s = sessions.get(id);
+  if (!s) return;
+  s.hookDriven = true;
+  s.lastHookEvent = event;
+  if (state === 'attention') { if (!s.attention) setAttention(s, id); }
+  else if (state === 'busy') { clearAttention(s); }
+  else if (state === 'ended') { clearAttention(s); }
+});
+
 const MIN_IDLE_MS = Math.min(...Object.values(window.Attention.THRESHOLDS_MS));
 setInterval(() => {
   const now = Date.now();
@@ -275,6 +295,7 @@ setInterval(() => {
     const watching = windowFocused && activeSessionId === id;
     // cheap guards first — only read the terminal buffer once a flag is possible
     if (!s.alive || !s.hasOutput || s.attention || watching) continue;
+    if (s.hookDriven) continue; // the agent tells us; no need to guess
     if (now - s.lastData <= MIN_IDLE_MS) continue;
     // silence alone can't tell "waiting" from "thinking": classify the terminal
     // tail (prompt / question / working / plain) and let the kind pick the cutoff
