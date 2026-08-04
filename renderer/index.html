@@ -46,10 +46,17 @@
         <p class="repo-empty-sub" data-i18n="repos.emptySub">＋ でローカルフォルダを追加</p>
       </div>
 
-      <div class="legend">
-        <span><i class="dot live"></i><span data-i18n="legend.live">live</span></span>
-        <span><i class="dot waiting"></i><span data-i18n="legend.attention">attention</span></span>
-        <span><i class="dot"></i><span data-i18n="legend.exited">exited</span></span>
+      <!-- State filter. Doubles as the legend it replaces: the same three dots,
+           now clickable. On a busy deck "show me only what is waiting for me" is
+           the question the legend could only answer by eye. -->
+      <div id="state-filter" class="state-filter" role="group" data-i18n-aria-label="filter.title">
+        <button type="button" class="stf-btn active" data-state="all" aria-pressed="true" data-i18n="filter.all">すべて</button>
+        <button type="button" class="stf-btn" data-state="attention" aria-pressed="false">
+          <i class="dot waiting"></i><span data-i18n="filter.attention">要対応</span>
+        </button>
+        <button type="button" class="stf-btn" data-state="exited" aria-pressed="false">
+          <i class="dot"></i><span data-i18n="filter.exited">終了</span>
+        </button>
       </div>
 
       <div class="sidebar-foot">
@@ -157,7 +164,7 @@
 
   <div id="diff-overlay" class="diff-overlay" hidden>
     <div class="diff-backdrop" id="diff-backdrop"></div>
-    <div class="diff-panel">
+    <div class="diff-panel" role="dialog" aria-modal="true" data-i18n-aria-label="diff.title">
       <div class="diff-head">
         <div class="diff-title">
           <span id="diff-name">Diff</span>
@@ -182,7 +189,7 @@
 
   <div id="palette" class="palette" hidden>
     <div class="palette-backdrop" id="palette-backdrop"></div>
-    <div class="palette-panel">
+    <div class="palette-panel" role="dialog" aria-modal="true" data-i18n-aria-label="palette.title">
       <input id="palette-input" type="text" spellcheck="false" autocomplete="off"
              data-i18n-ph="palette.ph" placeholder="セッションを検索…（名前 / リポ / ブランチ / preset）" />
       <ul id="palette-list" class="palette-list"></ul>
@@ -192,7 +199,7 @@
 
   <div id="preset-overlay" class="preset-overlay" hidden>
     <div class="preset-backdrop" id="preset-backdrop"></div>
-    <div class="preset-panel">
+    <div class="preset-panel" role="dialog" aria-modal="true" data-i18n-aria-label="presets.title">
       <div class="preset-head">
         <span class="preset-title" data-i18n="presets.title">Agent presets</span>
         <button type="button" id="preset-close" class="ghost-btn" data-i18n="common.close">close</button>
@@ -215,7 +222,7 @@
 
   <div id="sched-overlay" class="preset-overlay" hidden>
     <div class="preset-backdrop" id="sched-backdrop"></div>
-    <div class="preset-panel">
+    <div class="preset-panel" role="dialog" aria-modal="true" data-i18n-aria-label="sched.title">
       <div class="preset-head">
         <span class="preset-title">&#9200; <span data-i18n="sched.title">スケジュール起動</span></span>
         <button type="button" id="sched-close" class="ghost-btn" data-i18n="common.close">close</button>

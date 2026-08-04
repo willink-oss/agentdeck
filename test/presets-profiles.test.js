@@ -253,3 +253,59 @@ test('the overrides storage key is distinct from the other preset keys', () => {
   assert.notEqual(P.KEY_OVERRIDES, P.KEY);
   assert.notEqual(P.KEY_OVERRIDES, P.KEY_INIT);
 });
+
+/* ---- agent identity: rail tone + glyph ------------------------------------ */
+
+test('every built-in declares a glyph and a tone', () => {
+  for (const key of Object.keys(P.BUILTINS)) {
+    const id = P.identityFor(key);
+    assert.ok(id.glyph && id.glyph.length > 0, `${key} has a glyph`);
+    assert.ok(P.TONES.includes(id.tone), `${key} tone is a known tone (${id.tone})`);
+  }
+});
+
+test('the agent built-ins are visually distinct from each other', () => {
+  const agents = Object.keys(P.BUILTINS).filter((k) => k !== 'shell');
+  const glyphs = agents.map((k) => P.glyphFor(k));
+  const tones = agents.map((k) => P.toneFor(k));
+  assert.equal(new Set(glyphs).size, agents.length, 'no two agents share a glyph');
+  assert.equal(new Set(tones).size, agents.length, 'no two agents share a tone');
+});
+
+test('no agent takes the neutral tone — that one reads as "not an agent"', () => {
+  for (const key of Object.keys(P.BUILTINS)) {
+    if (key === 'shell') continue;
+    assert.notEqual(P.toneFor(key), 'neutral', `${key} is not neutral`);
+  }
+  assert.equal(P.toneFor('shell'), 'neutral');
+});
+
+test('a custom preset gets a stable tone derived from its key', () => {
+  const first = P.toneFor('custom-aider');
+  assert.equal(P.toneFor('custom-aider'), first, 'same key, same tone across calls');
+  assert.ok(P.TONES.includes(first));
+  assert.notEqual(first, 'neutral', 'customs are agents, so never neutral');
+  assert.equal(P.glyphFor('custom-aider'), P.glyphFor('custom-other'), 'customs share one glyph');
+});
+
+test('toneFor spreads custom keys across the palette rather than collapsing', () => {
+  const keys = Array.from({ length: 40 }, (_, i) => `custom-agent-${i}`);
+  const used = new Set(keys.map((k) => P.toneFor(k)));
+  assert.ok(used.size >= 4, `expected several tones in use, got ${used.size}`);
+  assert.ok(!used.has('neutral'), 'neutral never assigned to a custom');
+});
+
+test('toneFor and glyphFor tolerate junk without throwing', () => {
+  for (const junk of [null, undefined, '', 0, {}]) {
+    assert.ok(P.TONES.includes(P.toneFor(junk)));
+    assert.ok(P.glyphFor(junk).length > 0);
+  }
+});
+
+test('merge: identity rides along on every entry', () => {
+  const merged = P.merge([{ key: 'custom-a', label: 'A', cmd: 'a' }]);
+  assert.equal(merged.claude.glyph, P.BUILTINS.claude.glyph);
+  assert.equal(merged.claude.tone, 'amber');
+  assert.equal(merged['custom-a'].glyph, P.glyphFor('custom-a'));
+  assert.equal(merged['custom-a'].tone, P.toneFor('custom-a'));
+});

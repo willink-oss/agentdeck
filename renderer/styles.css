@@ -115,25 +115,14 @@ html, body {
   min-height: 0;
   padding: 14px 10px 0;
   gap: 10px;
-  gap: 12px;
 }
 .repos-head { display: flex; align-items: center; justify-content: space-between; }
 .repos-title {
   font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim);
 }
-.repos-actions { display: flex; gap: 6px; }
-#repo-add, #repo-refresh {
-  width: 26px; height: 26px;
-  background: var(--bg-elev);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 15px;
-  line-height: 1;
-}
-#repo-add { font-size: 16px; }
-#repo-add:hover, #repo-refresh:hover { color: var(--accent-text); border-color: var(--accent-line); }
+.repos-actions { display: flex; gap: 4px; }
+/* ↻ and ＋ are .icon-btn like ⚙ and ⏰ — one shape for every small control */
+#repo-add { font-size: 15px; }
 
 .repo-msg {
   font-size: 10.5px; line-height: 1.4; color: var(--danger);
@@ -942,3 +931,61 @@ select { appearance: none; cursor: pointer; }
   color: var(--text-dim); cursor: pointer;
 }
 .sidebar-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- Agent identity ---------- */
+/* One tone per agent, mapped to PULSE primitives. The brand hue is deliberately
+   absent: blue means "Agent Deck's own UI" everywhere else, so an agent painted
+   in it would be unreadable as an agent. */
+.pane[data-tone="amber"]   { --tone: var(--pulse-color-amber-500); }
+.pane[data-tone="pink"]    { --tone: var(--pulse-color-pink-500); }
+.pane[data-tone="blue"]    { --tone: var(--pulse-color-sky-500); }
+.pane[data-tone="cyan"]    { --tone: var(--pulse-color-cyan-500); }
+.pane[data-tone="green"]   { --tone: var(--pulse-color-green-500); }
+.pane[data-tone="neutral"] { --tone: var(--pulse-color-neutral-400); }
+
+/* The rail: 2px down the pane's left edge, ahead of the terminal so it survives
+   the pane being scrolled. Cheap to scan across a 2x4 grid. */
+.pane::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--tone, var(--pulse-color-neutral-400));
+  pointer-events: none;
+  z-index: 2;
+}
+.pane { position: relative; }
+.pane.exited::before { opacity: 0.35; }
+.pane-glyph { flex: none; font-size: 11px; line-height: 1; color: var(--tone, var(--text-dim)); }
+/* Which codebase this agent is editing, when more than one is on the deck. */
+.pane-repo {
+  flex: none; font-size: 10px; color: var(--text-dim);
+  background: var(--bg-panel-2); border-radius: 4px; padding: 1px 6px;
+  max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pane-repo[hidden] { display: none; }
+
+/* ---------- State filter ---------- */
+.state-filter { display: flex; gap: 3px; flex: none; padding: 0 2px; }
+.stf-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: transparent; border: 1px solid transparent; border-radius: 5px;
+  color: var(--text-faint); cursor: pointer;
+  font-family: var(--mono); font-size: 10.5px; line-height: 1;
+  padding: 5px 7px; min-height: 24px;
+}
+.stf-btn:hover { color: var(--text); background: var(--bg-panel-2); }
+.stf-btn.active { color: var(--accent-text); border-color: var(--accent-line); background: var(--bg-panel-2); }
+.stf-btn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); flex: none; }
+.stf-btn .dot.waiting { background: var(--attention); }
+
+/* ---------- Keyboard reachability ---------- */
+/* Repo and session rows are clickable divs; without this they exist only for a
+   mouse. Focus is drawn with the same ring the rest of the app uses. */
+.repo-row, .repo-session { outline: none; }
+.repo-row:focus-visible, .repo-session:focus-visible,
+.pane-glyph:focus-visible, .stf-btn:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: -2px;
+  border-radius: 5px;
+}

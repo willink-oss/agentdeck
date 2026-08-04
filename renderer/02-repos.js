@@ -93,12 +93,30 @@ function setEmptyState(filteredRepoName) {
     emptyDescEl.textContent = t('empty.forRepo');
   }
 }
-/** Apply the repo focus-filter to the terminal grid, the filter pill, and the empty state. */
+/** Which session states the stage is showing: 'all' | 'attention' | 'exited'.
+ *  Orthogonal to the repository filter — both narrow, neither replaces the other. */
+let activeStateFilter = 'all';
+function matchesStateFilter(s) {
+  if (activeStateFilter === 'attention') return !!s.attention;
+  if (activeStateFilter === 'exited') return !s.alive;
+  return true;
+}
+function setStateFilter(state) {
+  activeStateFilter = ['attention', 'exited'].includes(state) ? state : 'all';
+  for (const b of stateFilterEl.querySelectorAll('.stf-btn')) {
+    const on = b.dataset.state === activeStateFilter;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  }
+  updateStage();
+}
+
+/** Apply the repo + state filters to the terminal grid, the pill, and the empty state. */
 function updateStage() {
   let total = 0, visible = 0;
   for (const s of sessions.values()) {
     total++;
-    const show = !activeRepoId || s.repoId === activeRepoId;
+    const show = (!activeRepoId || s.repoId === activeRepoId) && matchesStateFilter(s);
     s.el.style.display = show ? '' : 'none';
     if (show) visible++;
   }
@@ -164,7 +182,16 @@ function sessionRow(id, s) {
   nm.textContent = s.name;
   row.appendChild(dot);
   row.appendChild(nm);
+  // a clickable div is invisible to the keyboard until it can be focused and
+  // activated like the button it behaves as
+  row.tabIndex = 0;
+  row.setAttribute('role', 'button');
   row.addEventListener('click', (e) => { e.stopPropagation(); focusSession(id); });
+  row.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault(); e.stopPropagation();
+    focusSession(id);
+  });
   repoRowEls.set(id, row);
   return row;
 }
@@ -283,9 +310,37 @@ function buildGroup({ key, name, nameDim, path, branch, repoId, stat, worktrees,
     item.addEventListener('click', () => selectRepo(repoId));
     // double-click = launch the current Agent straight into this repo
     item.addEventListener('dblclick', () => { selectRepo(repoId); launch(currentLaunchOpts(path)); });
+    row.tabIndex = 0;
+    row.setAttribute('role', 'button');
+    row.setAttribute('aria-pressed', String(repoId === activeRepoId));
+    row.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault(); e.stopPropagation();
+      selectRepo(repoId);
+    });
   }
   return item;
 }
+/** Name the owning repository in each pane header. With several repositories on
+ *  one deck, "which codebase is this agent editing?" is not answerable from the
+ *  session name, and the cwd column is a truncated absolute path. Shown only when
+ *  more than one repository actually has sessions — on a single-repo deck it
+ *  would be the same word on every pane. */
+function refreshPaneRepos() {
+  const groups = new Set();
+  for (const s of sessions.values()) groups.add(groupKeyForSession(s));
+  const show = groups.size > 1;
+  for (const s of sessions.values()) {
+    const el = s.el.querySelector('.pane-repo');
+    if (!el) continue;
+    const repo = s.repoId ? findEff(s.repoId) : null;
+    const name = repo ? repo.name : t('repo.other');
+    el.textContent = name;
+    el.title = t('pane.repoTitle', { repo: name });
+    el.hidden = !show;
+  }
+}
+
 /** Full structural rebuild — use on add/remove/select repo and launch/kill session. */
 function renderRepos() {
   repoRowEls = new Map();
@@ -302,9 +357,10 @@ function renderRepos() {
   }
   const orphans = byRepo.get('') || [];
   if (orphans.length) {
-    repoListEl.appendChild(buildGroup({ key: '', name: 'Other', nameDim: true, sessList: orphans }));
+    repoListEl.appendChild(buildGroup({ key: '', name: t('repo.other'), nameDim: true, sessList: orphans }));
   }
   updateLaunchLabel();
+  refreshPaneRepos();
   updateStage();
 }
 /** In-place update for attention/exit transitions — avoids a full tree rebuild. */
@@ -329,5 +385,10 @@ function refreshSessionState(s) {
 $('#repo-add').addEventListener('click', addRepoFlow);
 $('#repo-refresh').addEventListener('click', refreshReposGit);
 stageAllBtn.addEventListener('click', clearRepoSelection);
+stateFilterEl.addEventListener('click', (e) => {
+  const b = e.target.closest('.stf-btn');
+  // clicking the active filter again clears it — no dead click on a toggle group
+  if (b) setStateFilter(b.dataset.state === activeStateFilter ? 'all' : b.dataset.state);
+});
 setInterval(refreshReposGit, 7000);
 window.addEventListener('focus', refreshReposGit);

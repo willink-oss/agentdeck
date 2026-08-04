@@ -142,6 +142,7 @@ const launchBtn = $('#launch');
 const stageFilterEl = $('#stage-filter');
 const stageFilterLabel = $('#stage-filter-label');
 const stageAllBtn = $('#stage-all');
+const stateFilterEl = $('#state-filter');
 const layoutSwitchEl = $('#layout-switch');
 const restoreBtnEl = $('#restore-deck');
 const paletteEl = $('#palette');

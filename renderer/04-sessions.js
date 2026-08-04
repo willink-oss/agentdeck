@@ -27,16 +27,23 @@ async function launch({ presetKey, command, name, cwd, worktree, branch, profile
   const pane = document.createElement('section');
   pane.className = 'pane';
   pane.dataset.id = id;
+  // Which agent this is has to survive a glance across eight panes, so it is
+  // said three ways: a coloured rail down the left edge, a glyph, and the badge.
+  // Colour alone would fail anyone who cannot separate the hues (WCAG 1.4.1).
+  pane.dataset.tone = preset.tone || Presets.toneFor(presetKey);
   const head = document.createElement('div');
   head.className = 'pane-head';
   head.innerHTML =
     '<span class="pane-grip" data-i18n-title="pane.drag">⠿</span>' +
     '<span class="status-dot live"></span>' +
+    '<span class="pane-glyph" aria-hidden="true"></span>' +
     '<span class="pane-name"></span>' +
     `<span class="pane-badge">${preset.badge}</span>` +
+    '<span class="pane-repo" hidden></span>' +
     '<span class="pane-cwd"></span>' +
     '<button class="pane-diff" data-i18n-title="pane.diff">diff</button>' +
     '<button class="pane-kill" data-i18n-title="pane.kill">kill</button>';
+  head.querySelector('.pane-glyph').textContent = preset.glyph || Presets.glyphFor(presetKey);
   const nameEl = head.querySelector('.pane-name');
   nameEl.textContent = displayName;
   nameEl.setAttribute('data-i18n-title', 'pane.rename');
@@ -62,6 +69,10 @@ async function launch({ presetKey, command, name, cwd, worktree, branch, profile
     fontFamily: '"JetBrains Mono","SF Mono","Menlo","Consolas",monospace',
     fontSize: 12, lineHeight: 1.15, cursorBlink: true, scrollback: 5000,
     theme: TERM_THEME, allowProposedApi: true,
+    // Without this xterm renders to a canvas that assistive tech cannot see, so
+    // the app's entire reason for existing — the terminals — is invisible to a
+    // screen reader. It mirrors the visible rows into a live region instead.
+    screenReaderMode: true,
   });
   const fit = new FitAddonCtor();
   term.loadAddon(fit);

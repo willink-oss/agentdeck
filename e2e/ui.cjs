@@ -325,6 +325,55 @@ async function closeHard(app) {
       null, { timeout: 10000 });
     ok(true, '「すべて表示」 clears the filter');
 
+    // -- agent identity: each pane says which agent it is three ways ------------
+    const identity = await win.evaluate(() => {
+      const pane = document.querySelector('.pane');
+      const cs = getComputedStyle(pane, '::before');
+      return {
+        tone: pane.dataset.tone,
+        railWidth: cs.width,
+        railColour: cs.backgroundColor,
+        glyph: (pane.querySelector('.pane-glyph') || {}).textContent,
+        badge: (pane.querySelector('.pane-badge') || {}).textContent,
+      };
+    });
+    ok(identity.tone && identity.glyph && identity.badge && identity.railWidth === '2px' &&
+      /^rgb/.test(identity.railColour),
+    `pane identifies its agent by rail + glyph + badge (${identity.tone}/${identity.glyph}/${identity.badge})`);
+
+    // -- state filter: narrow the stage to what is waiting, then clear ----------
+    await win.evaluate(() => {
+      const [id, s] = [...sessions][0];
+      setAttention(s, id);
+      renderRepos();
+    });
+    await win.click('.stf-btn[data-state="attention"]');
+    const filtered = await win.evaluate(() => ({
+      visible: [...document.querySelectorAll('.pane')].filter((p) => p.style.display !== 'none').length,
+      pressed: document.querySelector('.stf-btn[data-state="attention"]').getAttribute('aria-pressed'),
+    }));
+    ok(filtered.visible === 1 && filtered.pressed === 'true', 'state filter shows only sessions needing attention');
+    await win.click('.stf-btn[data-state="attention"]'); // clicking the active filter clears it
+    await win.waitForFunction(() =>
+      [...document.querySelectorAll('.pane')].every((p) => p.style.display !== 'none'),
+      null, { timeout: 10000 });
+    ok(await win.evaluate(() => document.querySelector('.stf-btn[data-state="all"]').classList.contains('active')),
+      'clicking the active state filter again clears it');
+    await win.evaluate(() => { for (const s of sessions.values()) clearAttention(s); });
+
+    // -- keyboard reachability: the sidebar rows are not mouse-only ------------
+    const reachable = await win.evaluate(() => {
+      const row = document.querySelector('.repo-item[data-repo-id] .repo-row');
+      const sess = document.querySelector('.repo-session');
+      return {
+        repoFocusable: row && row.tabIndex === 0 && row.getAttribute('role') === 'button',
+        sessionFocusable: sess && sess.tabIndex === 0 && sess.getAttribute('role') === 'button',
+        termAccessible: [...document.querySelectorAll('.pane .xterm')].every((el) => el.querySelector('.xterm-accessibility')),
+      };
+    });
+    ok(reachable.repoFocusable && reachable.sessionFocusable && reachable.termAccessible,
+      'repo/session rows are keyboard-reachable and terminals expose an accessibility tree');
+
     const setWindowMetrics = async (width, height, zoom) => {
       const applied = await app.evaluate(({ BrowserWindow, screen }, metrics) => {
         const bw = BrowserWindow.getAllWindows()[0];
