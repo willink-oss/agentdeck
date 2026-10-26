@@ -135,8 +135,8 @@
     "xterm-addon-webgl": "^0.16.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.2.0",
-    "electron": "^43.1.1",
-    "electron-builder": "^26.15.3"
+    "@electron/rebuild": "^4.2.1",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0"
   }
 }
